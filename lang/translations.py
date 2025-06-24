@@ -66,6 +66,15 @@ translations = {
         "MSG_MIGRATION_CANCELLED_BY_USER": "Migração cancelada pelo usuário",
         "MSG_CONFIRM_DETAILS_PREAMBLE": "Detalhes da Migração:",
         
+        # Docker specific messages
+        "MSG_NO_DOCKER": "Docker não encontrado",
+        "MSG_CREATING_DOCKER_IMAGE": "Criando imagem Docker...",
+        "MSG_DOCKER_BUILD_FAILED": "Falha ao construir imagem Docker",
+        "MSG_DOCKER_IMAGE_CREATED": "Imagem Docker criada com sucesso",
+        "MSG_STARTING_DOCKER_CONTAINER": "Iniciando container Docker...",
+        "MSG_DOCKER_CONTAINER_STARTED": "Container Docker iniciado com sucesso",
+        "MSG_DOCKER_CONTAINER_FAILED": "Falha ao iniciar container Docker",
+        
         # opções
         "OPTION_DHCP": "DHCP (automático)",
         "OPTION_MANUAL": "Manual (IP fixo)",
@@ -145,6 +154,15 @@ translations = {
         "MSG_MIGRATION_CANCELLED_INT": "Migration cancelled by interrupt",
         "MSG_MIGRATION_CANCELLED_BY_USER": "Migration cancelled by user",
         "MSG_CONFIRM_DETAILS_PREAMBLE": "Migration Details:",
+        
+        # Docker specific messages
+        "MSG_NO_DOCKER": "Docker not found",
+        "MSG_CREATING_DOCKER_IMAGE": "Creating Docker image...",
+        "MSG_DOCKER_BUILD_FAILED": "Failed to build Docker image",
+        "MSG_DOCKER_IMAGE_CREATED": "Docker image created successfully",
+        "MSG_STARTING_DOCKER_CONTAINER": "Starting Docker container...",
+        "MSG_DOCKER_CONTAINER_STARTED": "Docker container started successfully",
+        "MSG_DOCKER_CONTAINER_FAILED": "Failed to start Docker container",
         
         # options
         "OPTION_DHCP": "DHCP (automatic)",

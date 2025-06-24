@@ -87,7 +87,8 @@ def show_menu(language):
             console.print(translations[language]["goodbye"], style="bold yellow")
             break
         elif choice == "1":
-            console.print("[bold blue]Em desenvolvimento: Linux -> Docker[/bold blue]")
+            from migrate_docker import migrate_docker
+            migrate_docker()
             input("\nPressione Enter para continuar...")
         elif choice == "2":
             from migrate_lxc import migrate_lxc
