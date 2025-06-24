@@ -12,10 +12,19 @@ Uma ferramenta para migração de containers Linux entre diferentes plataformas.
 
 ## Instalação Rápida
 
-Para instalar o LINCON com um único comando, execute:
-
+### Ubuntu/Sistemas com sudo:
 ```bash
 curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh | sudo bash
+```
+
+### Debian/Proxmox (como root):
+```bash
+curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh | bash
+```
+
+### Ou usar su para elevar privilégios:
+```bash
+su -c "curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh | bash"
 ```
 
 ## Instalação Manual
@@ -23,16 +32,21 @@ curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh |
 1. Clone o repositório:
 ```bash
 git clone https://github.com/mathewalves/lincon.git
-```
-
-2. Entre no diretório:
-```bash
 cd lincon
 ```
 
-3. Instale as dependências:
+2. Instale as dependências:
 ```bash
-pip install -e .
+# Para Ubuntu 24.04+ (ambiente gerenciado):
+pip3 install rich --break-system-packages
+
+# Para outras distribuições:
+pip3 install rich
+```
+
+3. Execute diretamente:
+```bash
+python3 main.py
 ```
 
 ## Requisitos
@@ -47,10 +61,43 @@ pip install -e .
 
 ## Uso
 
-Após a instalação, simplesmente execute:
-
+Após a instalação automática:
 ```bash
 lincon
+```
+
+Ou execute diretamente:
+```bash
+python3 main.py
+```
+
+## Troubleshooting
+
+### Erro "sudo: command not found" (Debian/Proxmox)
+Execute como root:
+```bash
+curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh | bash
+```
+
+### Erro "externally-managed-environment" (Ubuntu 24.04+)
+O script automaticamente resolve isso, mas você pode instalar manualmente:
+```bash
+pip3 install rich --break-system-packages
+```
+
+### Docker não encontrado
+Instale o Docker:
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+```
+
+### Problemas de setup.py
+O novo script de instalação evita problemas com setuptools. Se ainda encontrar problemas, execute manualmente:
+```bash
+git clone https://github.com/mathewalves/lincon.git
+cd lincon
+pip3 install rich
+python3 main.py
 ```
 
 ## Licença

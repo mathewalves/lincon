@@ -7,11 +7,6 @@ setup(
     install_requires=[
         "rich>=10.0.0",
     ],
-    entry_points={
-        "console_scripts": [
-            "lincon=main:main",
-        ],
-    },
     author="Matheus Alves",
     author_email="matheusalves@example.com",
     description="Linux Containerized - Uma ferramenta para migração de containers",
