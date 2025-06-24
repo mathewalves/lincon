@@ -23,10 +23,14 @@ check_command() {
     return 0
 }
 
-# Verifica e instala o Python se necessário
+# Verifica e instala o Python e ferramentas necessárias
 if ! check_command python3; then
     apt-get update
-    apt-get install -y python3 python3-pip
+    apt-get install -y python3 python3-pip python3-venv
+else
+    # Garante que python3-venv e python3-pip estão instalados
+    apt-get update
+    apt-get install -y python3-pip python3-venv
 fi
 
 # Verifica e instala o git se necessário
@@ -49,9 +53,22 @@ echo -e "${GREEN}Clonando repositório LINCON...${NC}"
 git clone https://github.com/mathewalves/lincon.git
 cd lincon || exit 1
 
-# Instala as dependências Python
+# Instala as dependências Python usando método adequado para ambiente gerenciado
 echo -e "${GREEN}Instalando dependências Python...${NC}"
-pip3 install -e .
+
+# Tenta pip3 install normal primeiro
+if pip3 install -e . &>/dev/null; then
+    echo -e "${GREEN}Dependências instaladas com sucesso${NC}"
+else
+    echo -e "${YELLOW}Ambiente Python gerenciado externamente detectado. Usando método alternativo...${NC}"
+    # Usa --break-system-packages como fallback (necessário em Ubuntu 24.04+)
+    if pip3 install -e . --break-system-packages; then
+        echo -e "${GREEN}Dependências instaladas com sucesso${NC}"
+    else
+        echo -e "${RED}Falha ao instalar dependências Python${NC}"
+        exit 1
+    fi
+fi
 
 # Cria link simbólico para o comando lincon
 echo -e "${GREEN}Configurando comando 'lincon'...${NC}"
