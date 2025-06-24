@@ -76,23 +76,23 @@ if ! check_command sshpass; then
     install_package sshpass
 fi
 
+# Remove instalação anterior se existir
+echo -e "${YELLOW}Removendo instalação anterior (se existir)...${NC}"
+rm -f /usr/local/bin/lincon
+rm -rf /opt/lincon
+
 # Cria diretório de instalação
 INSTALL_DIR="/opt/lincon"
 echo -e "${GREEN}Criando diretório de instalação...${NC}"
 mkdir -p "$INSTALL_DIR"
 
-# Clona o repositório diretamente no diretório de instalação
+# Clona o repositório
 echo -e "${GREEN}Clonando repositório LINCON...${NC}"
-if [ -d "$INSTALL_DIR/.git" ]; then
-    echo -e "${YELLOW}Atualizando repositório existente...${NC}"
-    cd "$INSTALL_DIR" && git pull
-else
-    git clone https://github.com/mathewalves/lincon.git "$INSTALL_DIR"
-fi
+git clone https://github.com/mathewalves/lincon.git "$INSTALL_DIR"
 
 cd "$INSTALL_DIR" || exit 1
 
-# Instala apenas as dependências Python (sem o pacote em modo desenvolvimento)
+# Instala apenas as dependências Python
 echo -e "${GREEN}Instalando dependências Python...${NC}"
 
 # Instala apenas o rich diretamente
@@ -110,25 +110,37 @@ fi
 
 # Cria script executável
 echo -e "${GREEN}Configurando comando 'lincon'...${NC}"
+
+# Cria o arquivo script
 cat > /usr/local/bin/lincon << 'EOF'
 #!/bin/bash
 cd /opt/lincon
 python3 main.py "$@"
 EOF
 
+# Torna executável
 chmod +x /usr/local/bin/lincon
 
 # Torna o main.py executável
 chmod +x "$INSTALL_DIR/main.py"
 
-echo -e "\n${GREEN}Instalação concluída!${NC}"
+# Verifica se o comando foi criado corretamente
+if [ -x /usr/local/bin/lincon ]; then
+    echo -e "${GREEN}Comando 'lincon' configurado com sucesso${NC}"
+else
+    echo -e "${RED}Erro ao configurar comando 'lincon'${NC}"
+fi
+
+echo
+echo -e "${GREEN}Instalação concluída!${NC}"
 echo -e "${YELLOW}Localização: ${NC}$INSTALL_DIR"
 echo -e "${YELLOW}Para usar o LINCON, simplesmente digite: ${NC}${CYAN}lincon${NC}"
 
 # Pergunta se quer executar agora
+echo
 read -p "Deseja executar o LINCON agora? (s/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Ss]$ ]]; then
     echo -e "${GREEN}Iniciando LINCON...${NC}"
-    lincon
+    /usr/local/bin/lincon
 fi
