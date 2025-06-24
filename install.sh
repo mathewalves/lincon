@@ -131,15 +131,15 @@ else
     echo -e "${RED}Erro ao configurar comando 'lincon'${NC}"
 fi
 
-echo
+echo ""
 echo -e "${GREEN}Instalação concluída!${NC}"
 echo -e "${YELLOW}Localização: ${NC}$INSTALL_DIR"
 echo -e "${YELLOW}Para usar o LINCON, simplesmente digite: ${NC}${CYAN}lincon${NC}"
 
 # Pergunta se quer executar agora
-echo
+echo ""
 read -p "Deseja executar o LINCON agora? (s/N) " -n 1 -r
-echo
+echo ""
 if [[ $REPLY =~ ^[Ss]$ ]]; then
     echo -e "${GREEN}Iniciando LINCON...${NC}"
     /usr/local/bin/lincon
