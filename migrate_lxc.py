@@ -229,9 +229,11 @@ def try_alternative_sshpass(target, port, password):
             result = subprocess.run(method['cmd'], capture_output=True, text=True, timeout=15)
             if result.returncode == 0:
                 console.print(f"   ✅ {method['name']} funcionou!")
-                # Atualizar comando SSH globalmente
+                # Atualizar comando SSH globalmente (remove target e echo de teste)
                 global ssh_method
-                ssh_method = method['cmd'][:-1]  # Remove o echo de teste
+                # Remove o target e o echo, mantém apenas o comando base SSH
+                ssh_base = method['cmd'][:-2]  # Remove root@target e echo
+                ssh_method = ssh_base
                 return True
             else:
                 console.print(f"   ❌ {method['name']} falhou: {result.stderr.strip()}")
@@ -295,6 +297,14 @@ def setup_ssh_key(target, port):
 # Variáveis globais para métodos SSH alternativos
 ssh_method = None
 use_ssh_key = False
+ssh_diagnosis_attempted = False
+
+def reset_ssh_config():
+    """Reseta configurações SSH globais"""
+    global ssh_method, use_ssh_key, ssh_diagnosis_attempted
+    ssh_method = None
+    use_ssh_key = False
+    ssh_diagnosis_attempted = False
 
 def back_to_menu_option():
     """Pergunta se quer voltar ao menu"""
@@ -389,15 +399,18 @@ def test_ssh_connection(target, port, password):
             pass
     
     if ssh_method:
-        # Tentar com método SSH alternativo
+        # Tentar com método SSH alternativo já configurado
         try:
+            # ssh_method contém comando base, adicionar target e comando
             cmd = ssh_method + [f"root@{target}", "echo 'Conexão OK'"]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             if result.returncode == 0:
                 display_success("SSH_CONNECTION_OK")
                 return True
-        except:
-            pass
+        except Exception as e:
+            # Se falhar, resetar ssh_method para tentar outros métodos
+            console.print(f"[dim]Método SSH salvo falhou: {e}[/dim]")
+            ssh_method = None
     
     try:
         # Teste padrão com sshpass
@@ -424,21 +437,40 @@ def test_ssh_connection(target, port, password):
             if "Permission denied" in result.stderr and ("publickey" in result.stderr or "password" in result.stderr):
                 display_error("SSH_PERMISSION_DENIED")
                 
-                # Diagnóstico avançado
-                issue_type = diagnose_ssh_issue(target, port, password)
+                global ssh_diagnosis_attempted
                 
-                # Oferece soluções específicas
-                if offer_ssh_solutions(target, port, password, issue_type):
-                    # Testa novamente após aplicar solução
-                    if Confirm.ask(get_text("SSH_RETEST_CONNECTION"), default=True):
-                        return test_ssh_connection(target, port, password)
+                # Só faz diagnóstico se ainda não tentou
+                if not ssh_diagnosis_attempted:
+                    ssh_diagnosis_attempted = True
+                    
+                    # Diagnóstico avançado
+                    issue_type = diagnose_ssh_issue(target, port, password)
+                    
+                    # Oferece soluções específicas
+                    if offer_ssh_solutions(target, port, password, issue_type):
+                        # Testa novamente após aplicar solução
+                        if Confirm.ask(get_text("SSH_RETEST_CONNECTION"), default=True):
+                            return test_ssh_connection(target, port, password)
+                        else:
+                            return False
+                    else:
+                        # Fallback para tutorial básico
+                        if Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL"), default=True):
+                            display_ssh_tutorial()
+                            console.print()
+                        return False
                 else:
-                    # Fallback para tutorial básico
-                    if Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL"), default=True):
+                    # Se já tentou diagnóstico, oferece opções de escape
+                    console.print(f"[yellow]{get_text('SSH_PERSISTENT_ISSUE')}[/yellow]")
+                    
+                    if Confirm.ask(get_text("SSH_RESET_AND_TRY"), default=False):
+                        reset_ssh_config()
+                        return test_ssh_connection(target, port, password)
+                    elif Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL"), default=True):
                         display_ssh_tutorial()
                         console.print()
-                
-                return False
+                    
+                    return False
             else:
                 display_recommendation("SSH_CHECK_LIST")
                 return False
@@ -946,7 +978,7 @@ def convert(data):
                 f"root@{data['target']}"
             ]
         elif ssh_method:
-            ssh_command = ssh_method[:-1] + [f"root@{data['target']}"]  # Remove último argumento e adiciona target
+            ssh_command = ssh_method + [f"root@{data['target']}"]  # Adiciona target ao comando base
         else:
             ssh_command = [
                 "sshpass", "-p", data["passwordSSH"],

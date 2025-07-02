@@ -507,7 +507,10 @@ translations = {
         "SSH_SSHPASS_ISSUE": "Problema específico com sshpass detectado",
         "SSH_TRY_INTERACTIVE": "Tentar modo interativo?",
         "SSH_MANUAL_TEST": "Teste manual funcionou?",
-        "SSH_RETEST_CONNECTION": "Testar conexão novamente?"
+        "SSH_RETEST_CONNECTION": "Testar conexão novamente?",
+        "SSH_SKIP_FOR_NOW": "Pular SSH por enquanto e continuar?",
+        "SSH_RESET_AND_TRY": "Resetar configurações SSH e tentar novamente?",
+        "SSH_PERSISTENT_ISSUE": "Problema SSH persistente detectado"
     },
     "en": {
         # menu
@@ -1017,6 +1020,9 @@ translations = {
         "SSH_SSHPASS_ISSUE": "Specific sshpass issue detected",
         "SSH_TRY_INTERACTIVE": "Try interactive mode?",
         "SSH_MANUAL_TEST": "Manual test worked?",
-        "SSH_RETEST_CONNECTION": "Test connection again?"
+        "SSH_RETEST_CONNECTION": "Test connection again?",
+        "SSH_SKIP_FOR_NOW": "Skip SSH for now and continue?",
+        "SSH_RESET_AND_TRY": "Reset SSH settings and try again?",
+        "SSH_PERSISTENT_ISSUE": "Persistent SSH issue detected"
     }
 }
