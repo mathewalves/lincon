@@ -82,6 +82,220 @@ def display_ssh_tutorial():
         padding=(1, 2)
     ))
 
+def diagnose_ssh_issue(target, port, password):
+    """Diagnóstico avançado de problemas SSH"""
+    console.print()
+    console.print(Panel(
+        get_text('SSH_DIAG_INTRO'),
+        title=get_text('SSH_DIAG_TITLE'),
+        border_style="yellow",
+        padding=(1, 2)
+    ))
+    
+    console.print(f"[yellow]{get_text('SSH_DIAG_TESTING')}[/yellow]")
+    
+    # Teste 1: SSH direto sem sshpass
+    console.print(f"\n🔍 {get_text('SSH_DIAG_METHOD1')}")
+    try:
+        direct_cmd = [
+            "ssh", "-p", str(port), 
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=5",
+            "-o", "PasswordAuthentication=no",
+            f"root@{target}",
+            "echo 'test'"
+        ]
+        direct_result = subprocess.run(direct_cmd, capture_output=True, text=True, timeout=10)
+        
+        if direct_result.returncode == 0:
+            console.print("   ✅ SSH direto funciona (chave pública configurada)")
+            return "key_auth"
+        else:
+            console.print("   ❌ SSH direto falha (sem chave pública)")
+    except:
+        console.print("   ❌ SSH direto falha (timeout ou erro)")
+    
+    # Teste 2: Verificar se senha funciona manualmente
+    console.print(f"\n🔍 {get_text('SSH_DIAG_METHOD2')}")
+    manual_works = Confirm.ask(f"   {get_text('SSH_MANUAL_TEST')}", default=True)
+    
+    if manual_works:
+        console.print("   ✅ SSH manual funciona")
+        display_message("TITLE_INFO", "SSH_WORKING_MANUALLY")
+        return "sshpass_issue"
+    else:
+        console.print("   ❌ SSH manual também falha")
+        return "general_auth_issue"
+    
+    # Teste 3: Verificar configuração SSH
+    console.print(f"\n🔍 {get_text('SSH_DIAG_METHOD3')}")
+    try:
+        config_cmd = [
+            "ssh", "-p", str(port),
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=5",
+            f"root@{target}",
+            "cat /etc/ssh/sshd_config | grep -E '(PermitRootLogin|PasswordAuthentication)'"
+        ]
+        config_result = subprocess.run(config_cmd, capture_output=True, text=True, timeout=10)
+        console.print(f"   📋 Configuração SSH: {config_result.stdout.strip()}")
+    except:
+        console.print("   ❌ Não foi possível verificar configuração SSH")
+    
+    return "unknown"
+
+def offer_ssh_solutions(target, port, password, issue_type):
+    """Oferece soluções baseadas no diagnóstico"""
+    console.print()
+    
+    solutions_content = f"""[bold cyan]{get_text('SSH_SOLUTION_TITLE')}[/bold cyan]
+
+{get_text('SSH_SOLUTION_1')}
+{get_text('SSH_SOLUTION_2')}
+{get_text('SSH_SOLUTION_3')}"""
+
+    console.print(Panel(
+        solutions_content,
+        border_style="green",
+        padding=(1, 2)
+    ))
+    
+    if issue_type == "sshpass_issue":
+        console.print(f"[yellow]{get_text('SSH_SSHPASS_ISSUE')}[/yellow]")
+        
+        # Tentar sshpass com diferentes opções
+        if Confirm.ask("🔧 Tentar sshpass com configurações alternativas?", default=True):
+            return try_alternative_sshpass(target, port, password)
+    
+    elif issue_type == "key_auth":
+        if Confirm.ask(get_text('SSH_KEY_SETUP'), default=False):
+            return setup_ssh_key(target, port)
+    
+    # Modo interativo como último recurso
+    if Confirm.ask(get_text('SSH_TRY_INTERACTIVE'), default=True):
+        return try_interactive_ssh(target, port)
+    
+    return False
+
+def try_alternative_sshpass(target, port, password):
+    """Tenta diferentes configurações de sshpass"""
+    console.print(f"[cyan]🔧 Testando configurações alternativas do sshpass...[/cyan]")
+    
+    # Método 1: sshpass com diferentes opções SSH
+    methods = [
+        {
+            "name": "Método 1: Forçar autenticação por senha",
+            "cmd": [
+                "sshpass", "-p", password,
+                "ssh", "-p", str(port),
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "PasswordAuthentication=yes",
+                "-o", "PubkeyAuthentication=no",
+                "-o", "ConnectTimeout=10",
+                f"root@{target}",
+                "echo 'Conexão OK'"
+            ]
+        },
+        {
+            "name": "Método 2: sshpass com TTY",
+            "cmd": [
+                "sshpass", "-p", password,
+                "ssh", "-p", str(port),
+                "-tt",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "ConnectTimeout=10",
+                f"root@{target}",
+                "echo 'Conexão OK'"
+            ]
+        },
+        {
+            "name": "Método 3: sshpass alternativo",
+            "cmd": [
+                "sshpass", "-p", password,
+                "ssh", "-p", str(port),
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "BatchMode=no",
+                "-o", "ConnectTimeout=10",
+                f"root@{target}",
+                "echo 'Conexão OK'"
+            ]
+        }
+    ]
+    
+    for i, method in enumerate(methods, 1):
+        console.print(f"   🔍 {method['name']}...")
+        try:
+            result = subprocess.run(method['cmd'], capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                console.print(f"   ✅ {method['name']} funcionou!")
+                # Atualizar comando SSH globalmente
+                global ssh_method
+                ssh_method = method['cmd'][:-1]  # Remove o echo de teste
+                return True
+            else:
+                console.print(f"   ❌ {method['name']} falhou: {result.stderr.strip()}")
+        except subprocess.TimeoutExpired:
+            console.print(f"   ⏰ {method['name']} timeout")
+        except Exception as e:
+            console.print(f"   ❌ {method['name']} erro: {e}")
+    
+    return False
+
+def try_interactive_ssh(target, port):
+    """Modo interativo para SSH"""
+    console.print(f"[cyan]🎮 Modo interativo ativado[/cyan]")
+    console.print(f"[yellow]Execute o comando abaixo em outro terminal:[/yellow]")
+    console.print(f"[bold green]ssh -p {port} root@{target}[/bold green]")
+    console.print()
+    console.print("[dim]Após conectar com sucesso, volte aqui e confirme[/dim]")
+    
+    if Confirm.ask("✅ SSH manual realizado com sucesso?", default=False):
+        console.print("[green]🎉 Ótimo! Continuando com chave SSH...[/green]")
+        return setup_ssh_key(target, port)
+    
+    return False
+
+def setup_ssh_key(target, port):
+    """Configura chave SSH para conexão segura"""
+    console.print(f"[cyan]{get_text('SSH_KEY_GENERATION')}[/cyan]")
+    
+    try:
+        # Verifica se já existe chave
+        key_path = os.path.expanduser("~/.ssh/id_rsa")
+        if not os.path.exists(key_path):
+            # Gera nova chave SSH
+            keygen_cmd = ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", key_path, "-N", ""]
+            subprocess.run(keygen_cmd, check=True, capture_output=True)
+            console.print("🔑 Chave SSH gerada")
+        else:
+            console.print("🔑 Usando chave SSH existente")
+        
+        # Copia chave para o servidor
+        console.print(f"[cyan]{get_text('SSH_KEY_COPY')}[/cyan]")
+        console.print(f"[yellow]Execute o comando abaixo:[/yellow]")
+        console.print(f"[bold green]ssh-copy-id -p {port} root@{target}[/bold green]")
+        console.print()
+        
+        if Confirm.ask("🔑 Chave copiada com sucesso?", default=False):
+            # Testa conexão com chave
+            test_cmd = ["ssh", "-p", str(port), "-o", "ConnectTimeout=10", f"root@{target}", "echo 'OK'"]
+            result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                console.print("✅ Chave SSH configurada com sucesso!")
+                global use_ssh_key
+                use_ssh_key = True
+                return True
+        
+    except Exception as e:
+        console.print(f"❌ Erro ao configurar chave SSH: {e}")
+    
+    return False
+
+# Variáveis globais para métodos SSH alternativos
+ssh_method = None
+use_ssh_key = False
+
 def back_to_menu_option():
     """Pergunta se quer voltar ao menu"""
     return Confirm.ask(get_text("BACK_TO_MENU"), default=True)
@@ -157,10 +371,36 @@ def check_dependencies():
     return True
 
 def test_ssh_connection(target, port, password):
-    """Testa conexão SSH"""
+    """Testa conexão SSH com diagnóstico avançado"""
     display_message("TITLE_INFO", "TESTING_SSH")
     
+    # Se já temos método SSH funcionando, usar ele
+    global ssh_method, use_ssh_key
+    
+    if use_ssh_key:
+        # Tentar com chave SSH
+        try:
+            cmd = ["ssh", "-p", str(port), "-o", "ConnectTimeout=10", f"root@{target}", "echo 'Conexão OK'"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                display_success("SSH_CONNECTION_OK")
+                return True
+        except:
+            pass
+    
+    if ssh_method:
+        # Tentar com método SSH alternativo
+        try:
+            cmd = ssh_method + [f"root@{target}", "echo 'Conexão OK'"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                display_success("SSH_CONNECTION_OK")
+                return True
+        except:
+            pass
+    
     try:
+        # Teste padrão com sshpass
         cmd = [
             "sshpass", "-p", password,
             "ssh", "-p", str(port),
@@ -184,15 +424,24 @@ def test_ssh_connection(target, port, password):
             if "Permission denied" in result.stderr and ("publickey" in result.stderr or "password" in result.stderr):
                 display_error("SSH_PERMISSION_DENIED")
                 
-                # Oferece tutorial SSH
-                if Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL"), default=True):
-                    display_ssh_tutorial()
-                    console.print()
-                    return False  # Retorna False para indicar falha na conexão
+                # Diagnóstico avançado
+                issue_type = diagnose_ssh_issue(target, port, password)
+                
+                # Oferece soluções específicas
+                if offer_ssh_solutions(target, port, password, issue_type):
+                    # Testa novamente após aplicar solução
+                    if Confirm.ask(get_text("SSH_RETEST_CONNECTION"), default=True):
+                        return test_ssh_connection(target, port, password)
+                else:
+                    # Fallback para tutorial básico
+                    if Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL"), default=True):
+                        display_ssh_tutorial()
+                        console.print()
+                
+                return False
             else:
                 display_recommendation("SSH_CHECK_LIST")
-            
-            return False
+                return False
             
     except subprocess.TimeoutExpired:
         display_error("SSH_TIMEOUT")
@@ -670,7 +919,10 @@ def collect_fs(ssh_command):
         tar_command.extend(["--exclude", path])
     tar_command.append(".")
     
-    ssh_command.extend(["cd / &&"] + tar_command)
+    # Ajusta comando para diferentes tipos de SSH
+    remote_cmd = "cd / && " + " ".join(tar_command)
+    ssh_command.append(remote_cmd)
+    
     return subprocess.Popen(ssh_command, stdout=subprocess.PIPE)
 
 def convert(data):
@@ -682,14 +934,28 @@ def convert(data):
         display_message("TITLE_INFO", "COLLECTING_FILESYSTEM")
         display_recommendation("COLLECTION_TIME_WARNING")
         
-        ssh_command = [
-            "sshpass", "-p", data["passwordSSH"],
-            "ssh", "-p", data["port"],
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ConnectTimeout=30",
-            "-o", "ServerAliveInterval=30",
-            f"root@{data['target']}"
-        ]
+        # Usa método SSH apropriado baseado no diagnóstico
+        global ssh_method, use_ssh_key
+        
+        if use_ssh_key:
+            ssh_command = [
+                "ssh", "-p", data["port"],
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "ConnectTimeout=30",
+                "-o", "ServerAliveInterval=30",
+                f"root@{data['target']}"
+            ]
+        elif ssh_method:
+            ssh_command = ssh_method[:-1] + [f"root@{data['target']}"]  # Remove último argumento e adiciona target
+        else:
+            ssh_command = [
+                "sshpass", "-p", data["passwordSSH"],
+                "ssh", "-p", data["port"],
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "ConnectTimeout=30",
+                "-o", "ServerAliveInterval=30",
+                f"root@{data['target']}"
+            ]
         
         try:
             start_time = time.time()

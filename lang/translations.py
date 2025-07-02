@@ -486,7 +486,28 @@ translations = {
         "SSH_TUTORIAL_CMD4": "sudo passwd root",
         "SSH_TUTORIAL_SECURITY": "⚠️  IMPORTANTE: Desabilite após a migração por segurança!",
         "SSH_TUTORIAL_DISABLE": "Para desabilitar: mude 'PermitRootLogin yes' para 'PermitRootLogin no'",
-        "SSH_CONTINUE_TUTORIAL": "Mostrar tutorial SSH?"
+        "SSH_CONTINUE_TUTORIAL": "Mostrar tutorial SSH?",
+        
+        # SSH Advanced Diagnostics  
+        "SSH_DIAG_TITLE": "🔍 Diagnóstico SSH Avançado",
+        "SSH_DIAG_INTRO": "Vamos identificar o problema específico:",
+        "SSH_DIAG_TESTING": "Testando diferentes métodos de conexão...",
+        "SSH_DIAG_METHOD1": "Método 1: SSH direto (sem sshpass)",
+        "SSH_DIAG_METHOD2": "Método 2: SSH com chave interativa",
+        "SSH_DIAG_METHOD3": "Método 3: Verificação de configuração SSH",
+        "SSH_WORKING_MANUALLY": "✅ SSH funciona manualmente mas falha no sshpass",
+        "SSH_SOLUTION_TITLE": "💡 Soluções Disponíveis",
+        "SSH_SOLUTION_1": "1️⃣ Usar SSH com chave pública (mais seguro)",
+        "SSH_SOLUTION_2": "2️⃣ Corrigir configuração sshpass",
+        "SSH_SOLUTION_3": "3️⃣ Modo interativo (entrada manual)",
+        "SSH_KEY_SETUP": "Configurar chave SSH?",
+        "SSH_KEY_GENERATION": "Gerando chave SSH para conexão segura...",
+        "SSH_KEY_COPY": "Copiando chave pública para o servidor...",
+        "SSH_CONFIG_ISSUE": "Possível problema de configuração SSH detectado",
+        "SSH_SSHPASS_ISSUE": "Problema específico com sshpass detectado",
+        "SSH_TRY_INTERACTIVE": "Tentar modo interativo?",
+        "SSH_MANUAL_TEST": "Teste manual funcionou?",
+        "SSH_RETEST_CONNECTION": "Testar conexão novamente?"
     },
     "en": {
         # menu
@@ -975,6 +996,27 @@ translations = {
         "SSH_TUTORIAL_CMD4": "sudo passwd root",
         "SSH_TUTORIAL_SECURITY": "⚠️  IMPORTANT: Disable after migration for security!",
         "SSH_TUTORIAL_DISABLE": "To disable: change 'PermitRootLogin yes' to 'PermitRootLogin no'",
-        "SSH_CONTINUE_TUTORIAL": "Show SSH tutorial?"
+        "SSH_CONTINUE_TUTORIAL": "Show SSH tutorial?",
+        
+        # SSH Advanced Diagnostics
+        "SSH_DIAG_TITLE": "🔍 Advanced SSH Diagnostics",
+        "SSH_DIAG_INTRO": "Let's identify the specific problem:",
+        "SSH_DIAG_TESTING": "Testing different connection methods...",
+        "SSH_DIAG_METHOD1": "Method 1: Direct SSH (without sshpass)",
+        "SSH_DIAG_METHOD2": "Method 2: SSH with interactive key",
+        "SSH_DIAG_METHOD3": "Method 3: SSH configuration check",
+        "SSH_WORKING_MANUALLY": "✅ SSH works manually but fails with sshpass",
+        "SSH_SOLUTION_TITLE": "💡 Available Solutions",
+        "SSH_SOLUTION_1": "1️⃣ Use SSH with public key (more secure)",
+        "SSH_SOLUTION_2": "2️⃣ Fix sshpass configuration",
+        "SSH_SOLUTION_3": "3️⃣ Interactive mode (manual input)",
+        "SSH_KEY_SETUP": "Setup SSH key?",
+        "SSH_KEY_GENERATION": "Generating SSH key for secure connection...",
+        "SSH_KEY_COPY": "Copying public key to server...",
+        "SSH_CONFIG_ISSUE": "Possible SSH configuration issue detected",
+        "SSH_SSHPASS_ISSUE": "Specific sshpass issue detected",
+        "SSH_TRY_INTERACTIVE": "Try interactive mode?",
+        "SSH_MANUAL_TEST": "Manual test worked?",
+        "SSH_RETEST_CONNECTION": "Test connection again?"
     }
 }
