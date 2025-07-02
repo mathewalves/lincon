@@ -52,6 +52,36 @@ def display_success(message_key):
     message = get_text(message_key)
     console.print(Panel(f"✅ {message}", title="✅ SUCESSO", style="green"))
 
+def display_ssh_tutorial():
+    """Exibe um tutorial moderno para habilitar SSH root"""
+    console.print()
+    
+    # Header moderno
+    tutorial_content = f"""[bold cyan]{get_text('SSH_TUTORIAL_INTRO')}[/bold cyan]
+
+{get_text('SSH_TUTORIAL_STEP1')}
+[dim]│[/dim] [bold green]{get_text('SSH_TUTORIAL_CMD1')}[/bold green]
+
+{get_text('SSH_TUTORIAL_STEP2')}
+[dim]│[/dim] [red]{get_text('SSH_TUTORIAL_FROM')}[/red]
+[dim]│[/dim] [green]{get_text('SSH_TUTORIAL_TO')}[/green]
+
+{get_text('SSH_TUTORIAL_STEP3')}
+[dim]│[/dim] [bold green]{get_text('SSH_TUTORIAL_CMD3')}[/bold green]
+
+{get_text('SSH_TUTORIAL_STEP4')}
+[dim]│[/dim] [bold green]{get_text('SSH_TUTORIAL_CMD4')}[/bold green]
+
+[bold yellow]{get_text('SSH_TUTORIAL_SECURITY')}[/bold yellow]
+[dim]{get_text('SSH_TUTORIAL_DISABLE')}[/dim]"""
+
+    console.print(Panel(
+        tutorial_content,
+        title=get_text('SSH_TUTORIAL_TITLE'),
+        border_style="cyan",
+        padding=(1, 2)
+    ))
+
 def back_to_menu_option():
     """Pergunta se quer voltar ao menu"""
     return Confirm.ask(get_text("BACK_TO_MENU"), default=True)
@@ -149,7 +179,19 @@ def test_ssh_connection(target, port, password):
         else:
             error_msg = get_text("SSH_CONNECTION_FAILED").format(result.stderr)
             console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
-            display_recommendation("SSH_CHECK_LIST")
+            
+            # Detecta erro de Permission denied específico
+            if "Permission denied" in result.stderr and ("publickey" in result.stderr or "password" in result.stderr):
+                display_error("SSH_PERMISSION_DENIED")
+                
+                # Oferece tutorial SSH
+                if Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL"), default=True):
+                    display_ssh_tutorial()
+                    console.print()
+                    return False  # Retorna False para indicar falha na conexão
+            else:
+                display_recommendation("SSH_CHECK_LIST")
+            
             return False
             
     except subprocess.TimeoutExpired:
@@ -182,24 +224,28 @@ def select_bridge():
                 display_recommendation("BRIDGE_CONFIG_ERROR")
                 return None
 
-            # Cria uma tabela para mostrar as bridges
-            table = Table(title=get_text("BRIDGE_AVAILABLE"))
-            table.add_column("Opção", style="cyan")
-            table.add_column("Bridge", style="green")
-            table.add_column("Descrição", style="yellow")
+            # Cria uma tabela moderna para mostrar as bridges
+            table = Table(title=f"[bold cyan]{get_text('BRIDGE_AVAILABLE')}[/bold cyan]", 
+                         show_header=True, header_style="bold bright_white",
+                         border_style="cyan", show_edge=False)
+            table.add_column("Opção", style="bright_cyan", width=6)
+            table.add_column("Bridge", style="bright_green", width=12)
+            table.add_column("Descrição", style="dim")
             
             for i, bridge in enumerate(bridges, 1):
                 desc = get_text("BRIDGE_DEFAULT") if bridge == "vmbr0" else get_text("BRIDGE_ADDITIONAL")
                 table.add_row(f"[{i}]", bridge, desc)
             
-            table.add_row(f"[0]", "🔙 Voltar", "Voltar ao menu anterior")
+            table.add_row("[0]", "🔙 Voltar", "[dim]Voltar ao menu anterior[/dim]")
+            console.print()
             console.print(table)
+            console.print()
             
             display_recommendation("REC_BRIDGE_DEFAULT")
 
             # Solicita escolha do usuário
             choice = Prompt.ask(
-                get_text("CHOOSE_BRIDGE"),
+                f"[bright_cyan]{get_text('CHOOSE_BRIDGE')}[/bright_cyan]",
                 choices=[str(i) for i in range(len(bridges) + 1)]
             )
             
@@ -254,13 +300,15 @@ def select_storage():
                 display_recommendation("STORAGE_CHECK_ACTIVE")
                 return None
 
-            # Cria tabela detalhada
-            table = Table(title=get_text("STORAGE_AVAILABLE"))
-            table.add_column("Opção", style="cyan")
-            table.add_column(get_text("STORAGE_NAME"), style="green")
-            table.add_column(get_text("STORAGE_TYPE"), style="yellow")
-            table.add_column(get_text("STORAGE_AVAILABLE_SPACE"), style="blue")
-            table.add_column(get_text("STORAGE_TOTAL"), style="magenta")
+            # Cria tabela moderna para storage
+            table = Table(title=f"[bold cyan]{get_text('STORAGE_AVAILABLE')}[/bold cyan]",
+                         show_header=True, header_style="bold bright_white",
+                         border_style="cyan", show_edge=False)
+            table.add_column("Opção", style="bright_cyan", width=6)
+            table.add_column(get_text("STORAGE_NAME"), style="bright_green", width=12)
+            table.add_column(get_text("STORAGE_TYPE"), style="bright_yellow", width=10)
+            table.add_column(get_text("STORAGE_AVAILABLE_SPACE"), style="bright_blue", width=12)
+            table.add_column(get_text("STORAGE_TOTAL"), style="bright_magenta", width=12)
             
             for i, info in enumerate(storage_info, 1):
                 table.add_row(
@@ -271,13 +319,15 @@ def select_storage():
                     info['total']
                 )
             
-            table.add_row(f"[0]", "🔙 Voltar", "", "", "")
+            table.add_row("[0]", "🔙 Voltar", "[dim]Menu anterior[/dim]", "", "")
+            console.print()
             console.print(table)
+            console.print()
             
             display_recommendation("STORAGE_CHECK_ACTIVE")
 
             choice = Prompt.ask(
-                get_text("CHOOSE_STORAGE"),
+                f"[bright_cyan]{get_text('CHOOSE_STORAGE')}[/bright_cyan]",
                 choices=[str(i) for i in range(len(storages) + 1)]
             )
             
@@ -310,18 +360,22 @@ def select_ip_config():
     while True:
         console.print(f"\n[cyan]{get_text('IP_CONFIG')}[/cyan]")
         
-        table = Table(title=get_text("IP_OPTIONS"))
-        table.add_column("Opção", style="cyan")
-        table.add_column("Tipo", style="green")
-        table.add_column("Descrição", style="yellow")
+        table = Table(title=f"[bold cyan]{get_text('IP_OPTIONS')}[/bold cyan]",
+                     show_header=True, header_style="bold bright_white",
+                     border_style="cyan", show_edge=False)
+        table.add_column("Opção", style="bright_cyan", width=6)
+        table.add_column("Tipo", style="bright_green", width=12)
+        table.add_column("Descrição", style="dim")
         
         table.add_row("[1]", get_text("IP_DHCP"), get_text("IP_DHCP_DESC"))
         table.add_row("[2]", get_text("IP_STATIC"), get_text("IP_STATIC_DESC"))
-        table.add_row("[0]", "🔙 Voltar", "Voltar ao menu anterior")
+        table.add_row("[0]", "🔙 Voltar", "[dim]Voltar ao menu anterior[/dim]")
         
+        console.print()
         console.print(table)
+        console.print()
         
-        choice = Prompt.ask(get_text("CHOOSE_IP_TYPE"), choices=["0", "1", "2"])
+        choice = Prompt.ask(f"[bright_cyan]{get_text('CHOOSE_IP_TYPE')}[/bright_cyan]", choices=["0", "1", "2"])
         
         if choice == "0":
             return "BACK", "BACK"
@@ -748,26 +802,30 @@ def confirm_migration(data):
     console.clear()
     console.print(f"[bold cyan]{get_text('MIGRATION_CONFIRMATION')}[/bold cyan]\n")
     
-    # Cria tabela de detalhes
-    table = Table(title=get_text("MIGRATION_DETAILS"))
-    table.add_column(get_text("DETAIL_ITEM"), style="cyan")
-    table.add_column(get_text("DETAIL_VALUE"), style="green")
+    # Cria tabela moderna de detalhes
+    table = Table(title=f"[bold green]{get_text('MIGRATION_DETAILS')}[/bold green]",
+                 show_header=True, header_style="bold bright_white",
+                 border_style="green", show_edge=False, padding=(0, 1))
+    table.add_column(get_text("DETAIL_ITEM"), style="bright_cyan", width=20)
+    table.add_column(get_text("DETAIL_VALUE"), style="bright_white")
     
-    table.add_row(get_text("DETAIL_CT_ID"), data['id'])
-    table.add_row(get_text("DETAIL_CT_NAME"), data['name'])
-    table.add_row(get_text("DETAIL_SOURCE"), f"{data['target']}:{data['port']}")
-    table.add_row(get_text("DETAIL_BRIDGE"), data['bridge'])
+    table.add_row(get_text("DETAIL_CT_ID"), f"[bright_green]{data['id']}[/bright_green]")
+    table.add_row(get_text("DETAIL_CT_NAME"), f"[bright_yellow]{data['name']}[/bright_yellow]")
+    table.add_row(get_text("DETAIL_SOURCE"), f"[bright_blue]{data['target']}:{data['port']}[/bright_blue]")
+    table.add_row(get_text("DETAIL_BRIDGE"), f"[bright_magenta]{data['bridge']}[/bright_magenta]")
     
     if data["ip"] == "dhcp":
-        table.add_row(get_text("DETAIL_IP_DHCP"), get_text("IP_AUTOMATIC"))
+        table.add_row(get_text("DETAIL_IP_DHCP"), f"[bright_cyan]{get_text('IP_AUTOMATIC')}[/bright_cyan]")
     else:
-        table.add_row(get_text("DETAIL_IP_STATIC"), f"{data['ip']}/24")
-        table.add_row(get_text("DETAIL_GATEWAY"), data['gateway'])
+        table.add_row(get_text("DETAIL_IP_STATIC"), f"[bright_green]{data['ip']}/24[/bright_green]")
+        table.add_row(get_text("DETAIL_GATEWAY"), f"[bright_green]{data['gateway']}[/bright_green]")
     
-    table.add_row(get_text("DETAIL_DISK"), f"{data['rootsize']} em {data['storage']}")
-    table.add_row(get_text("DETAIL_MEMORY"), f"{data['memory']} MB")
+    table.add_row(get_text("DETAIL_DISK"), f"[bright_yellow]{data['rootsize']}[/bright_yellow] em [dim]{data['storage']}[/dim]")
+    table.add_row(get_text("DETAIL_MEMORY"), f"[bright_yellow]{data['memory']} MB[/bright_yellow]")
     
+    console.print()
     console.print(table)
+    console.print()
     
     display_warning("MIGRATION_WARNING")
     display_recommendation("MIGRATION_CHECKLIST")
@@ -784,12 +842,14 @@ def check_incomplete_migrations():
         
     console.print(f"\n[bold yellow]{get_text('INCOMPLETE_MIGRATIONS')}[/bold yellow]")
     
-    # Mostra as migrações incompletas
-    table = Table()
-    table.add_column("ID", justify="right", style="cyan")
-    table.add_column("Data", style="magenta")
-    table.add_column("Container", style="green")
-    table.add_column("Status", style="yellow")
+    # Mostra as migrações incompletas com interface moderna
+    table = Table(title="[bold yellow]Migrações Pendentes[/bold yellow]",
+                 show_header=True, header_style="bold bright_white",
+                 border_style="yellow", show_edge=False)
+    table.add_column("ID", justify="right", style="bright_cyan", width=12)
+    table.add_column("Data", style="bright_magenta", width=16)
+    table.add_column("Container", style="bright_green", width=15)
+    table.add_column("Status", style="bright_yellow")
     
     for m in incomplete:
         date = datetime.fromisoformat(m['timestamp']).strftime('%d/%m/%Y %H:%M')
@@ -801,7 +861,9 @@ def check_incomplete_migrations():
             m['step']
         )
     
+    console.print()
     console.print(table)
+    console.print()
     
     if Confirm.ask(get_text("CONTINUE_PREVIOUS")):
         choices = [m['migration_id'] for m in incomplete] + ["0"]

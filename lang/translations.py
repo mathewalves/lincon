@@ -469,7 +469,24 @@ translations = {
         # Incomplete migrations
         "INCOMPLETE_MIGRATIONS": "⚠️  Migrações Incompletas Encontradas",
         "CONTINUE_PREVIOUS": "🔄 Deseja continuar uma migração anterior?",
-        "MIGRATION_ID_PROMPT": "Digite o ID da migração (0 para nova migração)"
+        "MIGRATION_ID_PROMPT": "Digite o ID da migração (0 para nova migração)",
+        
+        # SSH Tutorial
+        "SSH_PERMISSION_DENIED": "Acesso SSH negado - root não permitido",
+        "SSH_TUTORIAL_TITLE": "🔧 Como Habilitar SSH Root",
+        "SSH_TUTORIAL_INTRO": "Para permitir login SSH como root, execute os comandos abaixo no servidor de origem:",
+        "SSH_TUTORIAL_STEP1": "1️⃣ Editar configuração SSH:",
+        "SSH_TUTORIAL_CMD1": "sudo nano /etc/ssh/sshd_config",
+        "SSH_TUTORIAL_STEP2": "2️⃣ Encontrar e alterar a linha:",
+        "SSH_TUTORIAL_FROM": "De: #PermitRootLogin prohibit-password",
+        "SSH_TUTORIAL_TO": "Para: PermitRootLogin yes",
+        "SSH_TUTORIAL_STEP3": "3️⃣ Reiniciar serviço SSH:",
+        "SSH_TUTORIAL_CMD3": "sudo systemctl restart ssh",
+        "SSH_TUTORIAL_STEP4": "4️⃣ Definir senha do root (se necessário):",
+        "SSH_TUTORIAL_CMD4": "sudo passwd root",
+        "SSH_TUTORIAL_SECURITY": "⚠️  IMPORTANTE: Desabilite após a migração por segurança!",
+        "SSH_TUTORIAL_DISABLE": "Para desabilitar: mude 'PermitRootLogin yes' para 'PermitRootLogin no'",
+        "SSH_CONTINUE_TUTORIAL": "Mostrar tutorial SSH?"
     },
     "en": {
         # menu
@@ -941,6 +958,23 @@ translations = {
         # Incomplete migrations
         "INCOMPLETE_MIGRATIONS": "⚠️  Incomplete Migrations Found",
         "CONTINUE_PREVIOUS": "🔄 Continue a previous migration?",
-        "MIGRATION_ID_PROMPT": "Enter migration ID (0 for new migration)"
+        "MIGRATION_ID_PROMPT": "Enter migration ID (0 for new migration)",
+        
+        # SSH Tutorial
+        "SSH_PERMISSION_DENIED": "SSH access denied - root not allowed",
+        "SSH_TUTORIAL_TITLE": "🔧 How to Enable SSH Root",
+        "SSH_TUTORIAL_INTRO": "To allow SSH login as root, run the commands below on the source server:",
+        "SSH_TUTORIAL_STEP1": "1️⃣ Edit SSH configuration:",
+        "SSH_TUTORIAL_CMD1": "sudo nano /etc/ssh/sshd_config",
+        "SSH_TUTORIAL_STEP2": "2️⃣ Find and change the line:",
+        "SSH_TUTORIAL_FROM": "From: #PermitRootLogin prohibit-password",
+        "SSH_TUTORIAL_TO": "To: PermitRootLogin yes",
+        "SSH_TUTORIAL_STEP3": "3️⃣ Restart SSH service:",
+        "SSH_TUTORIAL_CMD3": "sudo systemctl restart ssh",
+        "SSH_TUTORIAL_STEP4": "4️⃣ Set root password (if needed):",
+        "SSH_TUTORIAL_CMD4": "sudo passwd root",
+        "SSH_TUTORIAL_SECURITY": "⚠️  IMPORTANT: Disable after migration for security!",
+        "SSH_TUTORIAL_DISABLE": "To disable: change 'PermitRootLogin yes' to 'PermitRootLogin no'",
+        "SSH_CONTINUE_TUTORIAL": "Show SSH tutorial?"
     }
 }

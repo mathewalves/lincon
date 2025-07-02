@@ -30,13 +30,25 @@ LINCON_BANNER = """
 """
 
 def select_language():
-    console.print(Panel("🌎 Language / Idioma", style="bold blue"))
-    table = Table(show_header=False, box=None)
-    table.add_row("[1] Português (Brasil)")
-    table.add_row("[2] English")
-    console.print(table)
+    console.print()
     
-    choice = Prompt.ask("", choices=["1", "2"], default="1")
+    # Interface moderna para seleção de idioma
+    lang_options = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
+    lang_options.add_column(style="dim", width=3)
+    lang_options.add_column(style="bright_cyan", width=20)
+    lang_options.add_column(style="dim")
+    
+    lang_options.add_row("1", "Português (Brasil)", "🇧🇷")
+    lang_options.add_row("2", "English", "🇺🇸")
+    
+    console.print(Panel(
+        lang_options,
+        title="🌎 Language / Idioma",
+        border_style="cyan",
+        padding=(1, 2)
+    ))
+    
+    choice = Prompt.ask("[bright_cyan]Escolha / Choose[/bright_cyan]", choices=["1", "2"], default="1")
     return "pt-br" if choice == "1" else "en"
 
 def show_menu(language):
@@ -68,20 +80,25 @@ def show_menu(language):
         console.print(system_table)
         console.print(status_table)
         
-        # Mostra o menu principal
-        table = Table(show_header=False, box=None)
-        table.add_row("[1] " + translations[language]["MENU_LINUX_DOCKER"])
-        table.add_row("[2] " + translations[language]["MENU_LINUX_PROXMOX"])
-        table.add_row("[3] " + translations[language]["MENU_EXIT"])
+        # Menu principal moderno
+        menu_table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
+        menu_table.add_column(style="bright_cyan", width=3)
+        menu_table.add_column(style="bright_white", width=25)
+        menu_table.add_column(style="dim")
+        
+        menu_table.add_row("1", translations[language]["MENU_LINUX_DOCKER"], "🐳")
+        menu_table.add_row("2", translations[language]["MENU_LINUX_PROXMOX"], "📦")
+        menu_table.add_row("3", translations[language]["MENU_EXIT"], "👋")
         
         console.print(Panel(
-            table,
-            title=translations[language]["TITLE_WELCOME"],
-            subtitle=translations[language]["MSG_WELCOME"],
-            style="bold green"
+            menu_table,
+            title=f"[bold bright_green]{translations[language]['TITLE_WELCOME']}[/bold bright_green]",
+            subtitle=f"[dim]{translations[language]['MSG_WELCOME']}[/dim]",
+            border_style="bright_green",
+            padding=(1, 2)
         ))
         
-        choice = Prompt.ask("", choices=["1", "2", "3"])
+        choice = Prompt.ask("[bright_cyan]Escolha uma opção[/bright_cyan]", choices=["1", "2", "3"])
         
         if choice == "3":
             console.print(translations[language]["goodbye"], style="bold yellow")
