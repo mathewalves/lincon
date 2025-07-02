@@ -1,146 +1,77 @@
 #!/bin/bash
 
-# Cores para output
+# LINCON - Instalador Simplificado
+set -e
+
+# Cores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-WHITE='\033[1;37m'
 NC='\033[0m'
 
-echo -e "${GREEN}=== LINCON - Linux Containerized Installer ===${NC}\n"
+INSTALL_DIR="/opt/lincon"
+BIN_PATH="/usr/local/bin/lincon"
 
-# Verifica se está rodando como root
+echo -e "${CYAN}🐳 LINCON - Linux Containerized Installer${NC}"
+echo
+
+# Verifica root
 if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}Este script precisa ser executado como root${NC}"
-    echo -e "${YELLOW}Use um dos comandos abaixo:${NC}"
-    echo -e "${WHITE}  # Com sudo (Ubuntu/sistemas com sudo):${NC}"
-    echo -e "${CYAN}  curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh | sudo bash${NC}"
-    echo -e "${WHITE}  # Como root (Debian/Proxmox):${NC}"
-    echo -e "${CYAN}  su -c \"curl -sSL https://raw.githubusercontent.com/mathewalves/lincon/main/install.sh | bash\"${NC}"
+    echo -e "${RED}❌ Execute como root${NC}"
+    echo -e "${YELLOW}💡 Use: sudo $0${NC}"
     exit 1
 fi
 
-# Função para verificar se um comando existe
-check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        echo -e "${YELLOW}Instalando $1...${NC}"
-        return 1
+# Verifica instalação existente
+if [ -d "$INSTALL_DIR" ] || [ -f "$BIN_PATH" ]; then
+    echo -e "${YELLOW}⚠️  LINCON já está instalado${NC}"
+    read -p "🔄 Reinstalar? (s/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+        echo -e "${CYAN}✅ Mantendo instalação atual${NC}"
+        echo -e "${GREEN}💻 Para usar: lincon${NC}"
+        exit 0
     fi
-    return 0
-}
-
-# Função para instalar pacotes (detecta se sudo está disponível)
-install_package() {
-    if command -v sudo &> /dev/null && [ "$EUID" -ne 0 ]; then
-        sudo apt-get install -y "$@"
-    else
-        apt-get install -y "$@"
-    fi
-}
-
-# Função para atualizar repositórios
-update_repos() {
-    if command -v sudo &> /dev/null && [ "$EUID" -ne 0 ]; then
-        sudo apt-get update
-    else
-        apt-get update
-    fi
-}
-
-# Verifica se curl está instalado
-if ! check_command curl; then
-    update_repos
-    install_package curl
+    echo -e "${YELLOW}🗑️  Removendo instalação anterior...${NC}"
+    rm -rf "$INSTALL_DIR" "$BIN_PATH"
 fi
 
-# Verifica e instala o Python e ferramentas necessárias
-if ! check_command python3; then
-    update_repos
-    install_package python3 python3-pip python3-venv
-else
-    # Garante que python3-venv e python3-pip estão instalados
-    update_repos
-    install_package python3-pip python3-venv
-fi
+# Instala dependências
+echo -e "${CYAN}📦 Instalando dependências...${NC}"
+apt-get update > /dev/null 2>&1
+apt-get install -y python3-pip git sshpass curl > /dev/null 2>&1
 
-# Verifica e instala o git se necessário
-if ! check_command git; then
-    update_repos
-    install_package git
-fi
+# Instala Python Rich
+echo -e "${CYAN}🐍 Instalando Python Rich...${NC}"
+pip3 install rich --break-system-packages > /dev/null 2>&1 || pip3 install rich > /dev/null 2>&1
 
-# Verifica e instala o sshpass se necessário
-if ! check_command sshpass; then
-    update_repos
-    install_package sshpass
-fi
+# Clona repositório
+echo -e "${CYAN}📥 Baixando LINCON...${NC}"
+git clone https://github.com/mathewalves/lincon.git "$INSTALL_DIR" > /dev/null 2>&1
 
-# Remove instalação anterior se existir
-echo -e "${YELLOW}Removendo instalação anterior (se existir)...${NC}"
-rm -f /usr/local/bin/lincon
-rm -rf /opt/lincon
-
-# Cria diretório de instalação
-INSTALL_DIR="/opt/lincon"
-echo -e "${GREEN}Criando diretório de instalação...${NC}"
-mkdir -p "$INSTALL_DIR"
-
-# Clona o repositório
-echo -e "${GREEN}Clonando repositório LINCON...${NC}"
-git clone https://github.com/mathewalves/lincon.git "$INSTALL_DIR"
-
-cd "$INSTALL_DIR" || exit 1
-
-# Instala apenas as dependências Python
-echo -e "${GREEN}Instalando dependências Python...${NC}"
-
-# Instala apenas o rich diretamente
-if pip3 install rich &>/dev/null; then
-    echo -e "${GREEN}Dependências instaladas com sucesso${NC}"
-else
-    echo -e "${YELLOW}Ambiente Python gerenciado externamente detectado. Usando método alternativo...${NC}"
-    if pip3 install rich --break-system-packages; then
-        echo -e "${GREEN}Dependências instaladas com sucesso${NC}"
-    else
-        echo -e "${RED}Falha ao instalar dependências Python${NC}"
-        exit 1
-    fi
-fi
-
-# Cria script executável
-echo -e "${GREEN}Configurando comando 'lincon'...${NC}"
-
-# Cria o arquivo script
-cat > /usr/local/bin/lincon << 'EOF'
+# Cria comando
+echo -e "${CYAN}⚙️  Configurando comando...${NC}"
+cat > "$BIN_PATH" << 'EOF'
 #!/bin/bash
-cd /opt/lincon
-python3 main.py "$@"
+cd /opt/lincon && python3 main.py "$@"
 EOF
-
-# Torna executável
-chmod +x /usr/local/bin/lincon
-
-# Torna o main.py executável
+chmod +x "$BIN_PATH"
 chmod +x "$INSTALL_DIR/main.py"
 
-# Verifica se o comando foi criado corretamente
-if [ -x /usr/local/bin/lincon ]; then
-    echo -e "${GREEN}Comando 'lincon' configurado com sucesso${NC}"
+# Verifica instalação
+if [ -x "$BIN_PATH" ] && [ -f "$INSTALL_DIR/main.py" ]; then
+    echo
+    echo -e "${GREEN}✅ Instalação concluída!${NC}"
+    echo -e "${CYAN}💻 Para usar: ${YELLOW}lincon${NC}"
+    echo
+    
+    read -p "🚀 Executar agora? (s/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Ss]$ ]]; then
+        "$BIN_PATH"
+    fi
 else
-    echo -e "${RED}Erro ao configurar comando 'lincon'${NC}"
-fi
-
-echo ""
-echo -e "${GREEN}Instalação concluída!${NC}"
-echo -e "${YELLOW}Localização: ${NC}$INSTALL_DIR"
-echo -e "${YELLOW}Para usar o LINCON, simplesmente digite: ${NC}${CYAN}lincon${NC}"
-
-# Pergunta se quer executar agora
-echo ""
-read -p "Deseja executar o LINCON agora? (s/N) " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Ss]$ ]]; then
-    echo -e "${GREEN}Iniciando LINCON...${NC}"
-    /usr/local/bin/lincon
+    echo -e "${RED}❌ Erro na instalação${NC}"
+    exit 1
 fi
