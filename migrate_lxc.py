@@ -299,6 +299,9 @@ ssh_method = None
 use_ssh_key = False
 ssh_diagnosis_attempted = False
 
+# Modo de desenvolvimento para testes fora do Proxmox
+DEV_MODE = os.getenv("LINCON_DEV_MODE", "false").lower() == "true"
+
 def reset_ssh_config():
     """Reseta configurações SSH globais"""
     global ssh_method, use_ssh_key, ssh_diagnosis_attempted
@@ -565,7 +568,11 @@ def select_storage():
                     name, type_, status, total, used, avail = parts[0:6]
                     content = parts[6] if len(parts) > 6 else ""
                     
-                    if status == "active" and ("rootdir" in content or "images" in content):
+                    # Aceita storages ativos que suportam containers
+                    # Tipos que suportam containers: dir, lvm, lvmthin, zfs, btrfs
+                    container_types = ["dir", "lvm", "lvmthin", "zfs", "btrfs", "nfs"]
+                    
+                    if status == "active" and type_ in container_types:
                         storages.append(name)
                         storage_info.append({
                             'name': name,
@@ -573,7 +580,7 @@ def select_storage():
                             'total': total,
                             'used': used,
                             'avail': avail,
-                            'content': content
+                            'content': content or "containers"  # Default para containers
                         })
 
             if not storages:
