@@ -1158,7 +1158,9 @@ def check_incomplete_migrations():
     
     for m in incomplete:
         date = datetime.fromisoformat(m['timestamp']).strftime('%d/%m/%Y %H:%M')
-        container = m['data'].get('name', 'Unknown')
+        # Verifica se data existe e não é None
+        data = m.get('data', {})
+        container = data.get('name', 'Unknown') if data else 'Unknown'
         table.add_row(
             m['migration_id'],
             date,

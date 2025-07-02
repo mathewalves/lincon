@@ -37,9 +37,18 @@ class MigrationState:
             try:
                 with open(state_file, 'r') as f:
                     state = json.load(f)
-                    if state.get('step') != 'completed':
+                    # Valida se é uma migração incompleta válida
+                    if (state.get('step') != 'completed' and 
+                        state.get('migration_id') and 
+                        state.get('timestamp') and
+                        state.get('step')):
                         migrations.append(state)
-            except:
+            except Exception:
+                # Remove arquivos corrompidos
+                try:
+                    state_file.unlink()
+                except:
+                    pass
                 continue
         return sorted(migrations, key=lambda x: x.get('timestamp', ''), reverse=True)
     
