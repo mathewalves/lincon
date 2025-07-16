@@ -948,18 +948,38 @@ def validate_parameters(data):
 def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
     excluded_paths = [
-        "/proc/*", "/sys/*", "/dev/*", "/tmp/*", "/run/*",
-        "/mnt/*", "/media/*", "/lost+found", "/var/cache/apt/archives/*",
-        "/swapfile", "/swap.img"
+        "/proc",
+        "/sys",
+        "/dev",
+        "/tmp",
+        "/run",
+        "/mnt",
+        "/media",
+        "/lost+found",
+        "/var/cache/apt/archives",
+        "/swapfile",
+        "/swap.img"
     ]
     
-    tar_command = ["tar", "czpf", "-", "--numeric-owner", "--anchored"]
+    tar_command = [
+        "tar",
+        "czpf", "-",
+        "--warning=no-file-changed",
+        "--warning=no-file-removed",
+        "--one-file-system",
+        "--ignore-failed-read",
+        "--numeric-owner",
+        "--exclude-caches"
+    ]
+    
+    # Adiciona exclusões sem --anchored para melhor compatibilidade
     for path in excluded_paths:
         tar_command.extend(["--exclude", path])
-    tar_command.append(".")
+    
+    tar_command.append("/")
     
     # Ajusta comando para diferentes tipos de SSH
-    remote_cmd = "cd / && " + " ".join(tar_command)
+    remote_cmd = " ".join(tar_command)
     ssh_command.append(remote_cmd)
     
     return subprocess.Popen(ssh_command, stdout=subprocess.PIPE)
