@@ -47,7 +47,7 @@ class MigrationState:
                 # Remove arquivos corrompidos
                 try:
                     state_file.unlink()
-            except:
+                except:
                     pass
                 continue
         return sorted(migrations, key=lambda x: x.get('timestamp', ''), reverse=True)
@@ -56,4 +56,4 @@ class MigrationState:
         """Remove o arquivo de estado"""
         if self.state_file.exists():
             self.state_file.unlink()
-            self.data = {}
+            self.data = {} 
