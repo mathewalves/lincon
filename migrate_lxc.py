@@ -519,7 +519,7 @@ def select_bridge():
             for i, bridge in enumerate(bridges, 1):
                 desc = get_text("BRIDGE_DEFAULT") if bridge == "vmbr0" else get_text("BRIDGE_ADDITIONAL")
                 table.add_row(f"[{i}]", bridge, desc)
-            
+
             table.add_row("[0]", "🔙 Voltar", "[dim]Voltar ao menu anterior[/dim]")
             console.print()
             console.print(table)
@@ -542,7 +542,7 @@ def select_bridge():
             confirm_msg = get_text("CONFIRM_BRIDGE").format(selected_bridge)
             if Confirm.ask(confirm_msg):
                 return selected_bridge
-            
+
         except subprocess.CalledProcessError:
             display_error("BRIDGE_LIST_ERROR")
             if back_to_menu_option():
@@ -662,16 +662,16 @@ def select_ip_config():
         console.print()
         console.print(table)
         console.print()
-        
+
         choice = Prompt.ask(f"[bright_cyan]{get_text('CHOOSE_IP_TYPE')}[/bright_cyan]", choices=["0", "1", "2"])
-        
+    
         if choice == "0":
             return "BACK", "BACK"
         elif choice == "1":
             if Confirm.ask(get_text("CONFIRM_DHCP")):
                 return "dhcp", "dhcp"
-        else:
-            return configure_static_ip()
+            else:
+                return configure_static_ip()
 
 def configure_static_ip():
     """Configura IP estático com validação"""
@@ -938,7 +938,7 @@ def validate_parameters(data):
     if not validate_size_format(data["rootsize"]):
         display_error("INVALID_SIZE_FORMAT")
         return False
-        
+            
     if len(data["passwordCT"]) < 5:
         display_error("PASSWORD_TOO_SHORT")
         return False
@@ -1020,17 +1020,33 @@ def convert(data):
             start_time = time.time()
             process = collect_fs(ssh_command)
             
-            # Mostra progresso
+            # Mostra progresso detalhado
             console.print(f"[yellow]{get_text('TRANSFERRING_DATA')}[/yellow]")
+            console.print("[dim]📊 Monitorando transferência...[/dim]")
             
             with open(temp_file.name, 'wb') as f:
                 chunk_count = 0
+                last_update = time.time()
+                total_bytes = 0
+                
                 if process.stdout:  # Verifica se stdout não é None
                     for chunk in process.stdout:
                         f.write(chunk)
                         chunk_count += 1
-                        if chunk_count % 1000 == 0:
-                            console.print(".", end="", style="yellow")
+                        total_bytes += len(chunk)
+                        
+                        # Atualiza status a cada 2 segundos
+                        current_time = time.time()
+                        if current_time - last_update >= 2.0:
+                            elapsed = current_time - start_time
+                            speed = total_bytes / (1024 * 1024 * elapsed) if elapsed > 0 else 0
+                            size_mb = total_bytes / (1024 * 1024)
+                            
+                            # Limpa linha anterior
+                            console.print("\033[A\033[K", end="")
+                            console.print(f"[cyan]📦 Transferindo... {size_mb:.1f} MB ({speed:.1f} MB/s)[/cyan]")
+                            
+                            last_update = current_time
             
             console.print()  # Nova linha
             
@@ -1078,6 +1094,7 @@ def convert(data):
             ]
             
             console.print(f"[yellow]{get_text('CREATING_CONTAINER_PROGRESS')}[/yellow]")
+            console.print("[dim]⚙️  Criando container LXC...[/dim]")
             
             result = subprocess.run(create_command, capture_output=True, text=True)
             
@@ -1085,6 +1102,8 @@ def convert(data):
                 display_success("MSG_CT_CREATED")
                 
                 display_message("TITLE_INFO", "STARTING_CONTAINER")
+                console.print("[dim]🚀 Iniciando container...[/dim]")
+                
                 start_result = subprocess.run(["pct", "start", data["id"]], capture_output=True, text=True)
                 
                 if start_result.returncode == 0:
@@ -1258,7 +1277,7 @@ def migrate_lxc():
     if convert(data):
         if state_manager:
             state_manager.save_state(data, "completed")
-            state_manager.clear_state()  # Remove o arquivo de estado após sucesso
+        state_manager.clear_state()  # Remove o arquivo de estado após sucesso
         return True
     else:
         if state_manager:

@@ -67,8 +67,8 @@ if [ -x "$BIN_PATH" ] && [ -f "$INSTALL_DIR/main.py" ]; then
     echo
     
     read -p "🚀 Executar agora? (s/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Ss]$ ]]; then
+echo
+if [[ $REPLY =~ ^[Ss]$ ]]; then
         "$BIN_PATH"
     fi
 else

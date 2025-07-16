@@ -47,7 +47,7 @@ class MigrationState:
                 # Remove arquivos corrompidos
                 try:
                     state_file.unlink()
-                except:
+            except:
                     pass
                 continue
         return sorted(migrations, key=lambda x: x.get('timestamp', ''), reverse=True)
