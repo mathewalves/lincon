@@ -2,7 +2,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
-from rich.progress import track
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from rich.live import Live
+from rich.layout import Layout
 from lang.translations import translations
 from utils.migration_state import MigrationState
 from datetime import datetime
@@ -1014,7 +1016,8 @@ def check_storage_space(storage_name, required_size):
                     avail_bytes = parse_proxmox_size(avail)
                     required_bytes = parse_size(required_size)
                     total_bytes = parse_proxmox_size(total)
-                    console.print(f"[dim]🔍 Debug - Storage {name}: {format_size(avail_bytes)} disponível, {format_size(required_bytes)} necessário[/dim]")
+                    # Debug silencioso - só mostra se há problema
+                    # console.print(f"[dim]🔍 Debug - Storage {name}: {format_size(avail_bytes)} disponível, {format_size(required_bytes)} necessário[/dim]")
                     avail_readable = format_size(avail_bytes)
                     required_readable = format_size(required_bytes)
                     total_readable = format_size(total_bytes)
@@ -1058,10 +1061,13 @@ def collect_fs(ssh_command):
         "czpf", "-",
         "--warning=no-file-changed",
         "--warning=no-file-removed",
+        "--warning=no-file-link-changed",
         "--one-file-system",
         "--ignore-failed-read",
         "--numeric-owner",
-        "--exclude-caches"
+        "--exclude-caches",
+        "--remove-files-protection=absolute",  # Silencia mensagens de remoção
+        "2>/dev/null"  # Redireciona stderr para silenciar avisos
     ]
     
     # Adiciona exclusões sem --anchored para melhor compatibilidade
@@ -1070,11 +1076,11 @@ def collect_fs(ssh_command):
     
     tar_command.append("/")
     
-    # Ajusta comando para diferentes tipos de SSH
-    remote_cmd = " ".join(tar_command)
+    # Ajusta comando para diferentes tipos de SSH - silencia stderr do tar
+    remote_cmd = " ".join(tar_command[:-1]) + " / 2>/dev/null"
     ssh_command.append(remote_cmd)
     
-    return subprocess.Popen(ssh_command, stdout=subprocess.PIPE)
+    return subprocess.Popen(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 def convert(data):
     """Converte e cria o container"""
@@ -1127,35 +1133,45 @@ def convert(data):
             start_time = time.time()
             process = collect_fs(ssh_command)
             
-            # Mostra progresso detalhado
-            console.print(f"[yellow]{get_text('TRANSFERRING_DATA')}[/yellow]")
-            console.print("[dim]📊 Monitorando transferência...[/dim]")
-            
-            with open(temp_file.name, 'wb') as f:
-                chunk_count = 0
-                last_update = time.time()
-                total_bytes = 0
+            # Interface moderna de progresso
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+                console=console,
+                transient=False
+            ) as progress:
                 
-                if process.stdout:  # Verifica se stdout não é None
-                    for chunk in process.stdout:
-                        f.write(chunk)
-                        chunk_count += 1
-                        total_bytes += len(chunk)
-                        
-                        # Atualiza status a cada 2 segundos
-                        current_time = time.time()
-                        if current_time - last_update >= 2.0:
-                            elapsed = current_time - start_time
-                            speed = total_bytes / (1024 * 1024 * elapsed) if elapsed > 0 else 0
-                            size_mb = total_bytes / (1024 * 1024)
+                # Cria a task de transferência
+                task = progress.add_task(
+                    description="🚀 Transferindo sistema de arquivos...",
+                    total=None  # Tamanho desconhecido inicialmente
+                )
+                
+                with open(temp_file.name, 'wb') as f:
+                    chunk_count = 0
+                    last_update = time.time()
+                    total_bytes = 0
+                    update_interval = 0.5  # Atualização mais frequente
+                    
+                    if process.stdout:  # Verifica se stdout não é None
+                        for chunk in process.stdout:
+                            f.write(chunk)
+                            chunk_count += 1
+                            total_bytes += len(chunk)
                             
-                            # Limpa linha anterior
-                            console.print("\033[A\033[K", end="")
-                            console.print(f"[cyan]📦 Transferindo... {size_mb:.1f} MB ({speed:.1f} MB/s)[/cyan]")
-                            
-                            last_update = current_time
-            
-            console.print()  # Nova linha
+                            # Atualiza progresso mais frequentemente
+                            current_time = time.time()
+                            if current_time - last_update >= update_interval:
+                                progress.update(
+                                    task, 
+                                    completed=total_bytes,
+                                    description=f"🚀 Transferindo sistema ({total_bytes // (1024*1024):.0f} MB)..."
+                                )
+                                last_update = current_time
             
             if process.wait() != 0:
                 display_error("FILESYSTEM_COLLECTION_FAILED")
@@ -1169,14 +1185,24 @@ def convert(data):
             
             elapsed_time = time.time() - start_time
             size_mb = file_size / (1024 * 1024)
+            speed_mbps = size_mb / elapsed_time if elapsed_time > 0 else 0
             
-            console.print(f"[green]{get_text('COLLECTION_COMPLETE')}[/green]")
-            size_text = get_text("FILE_SIZE").format(size_mb)
-            time_text = get_text("TRANSFER_TIME").format(elapsed_time)
-            console.print(f"   {size_text}")
-            console.print(f"   {time_text}")
+            # Mostra resultado da transferência em painel elegante
+            result_content = f"""[green]✅ Transferência concluída com sucesso![/green]
+
+[cyan]📊 Estatísticas da Transferência:[/cyan]
+[white]   📦 Tamanho: {size_mb:.1f} MB[/white]
+[white]   ⏱️  Tempo: {elapsed_time:.1f}s[/white]
+[white]   🚀 Velocidade média: {speed_mbps:.1f} MB/s[/white]
+[white]   📁 Arquivo temporário criado[/white]"""
             
-            display_message("TITLE_INFO", "CREATING_CONTAINER")
+            console.print()
+            console.print(Panel(
+                result_content,
+                title="[bold green]🎉 Coleta Finalizada[/bold green]",
+                border_style="green",
+                padding=(1, 2)
+            ))
             
             # Prepara parâmetros do pct create
             if data["ip"] == "dhcp":
@@ -1200,41 +1226,81 @@ def convert(data):
                 "--arch", "amd64"
             ]
             
-            console.print(f"[yellow]{get_text('CREATING_CONTAINER_PROGRESS')}[/yellow]")
-            console.print("[dim]⚙️  Criando container LXC...[/dim]")
-            
-            result = subprocess.run(create_command, capture_output=True, text=True)
+            # Interface moderna de criação do container
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True
+            ) as progress:
+                task = progress.add_task(description="⚙️  Criando container LXC...", total=None)
+                result = subprocess.run(create_command, capture_output=True, text=True)
             
             if result.returncode == 0:
-                display_success("MSG_CT_CREATED")
+                console.print()
+                console.print("[bold green]✅ Container LXC criado com sucesso![/bold green]")
                 
-                display_message("TITLE_INFO", "STARTING_CONTAINER")
-                console.print("[dim]🚀 Iniciando container...[/dim]")
-                
-                start_result = subprocess.run(["pct", "start", data["id"]], capture_output=True, text=True)
+                # Interface moderna de inicialização
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                    transient=True
+                ) as progress:
+                    task = progress.add_task(description="🚀 Iniciando container...", total=None)
+                    start_result = subprocess.run(["pct", "start", data["id"]], capture_output=True, text=True)
                 
                 if start_result.returncode == 0:
-                    display_success("MSG_CT_STARTED")
+                    console.print()
+                    console.print("[bold green]🚀 Container iniciado com sucesso![/bold green]")
                     
-                    # Mostra informações finais
-                    console.print(f"\n[bold green]{get_text('MIGRATION_COMPLETE')}[/bold green]")
-                    console.print(f"[cyan]{get_text('CONTAINER_INFO_ID')}[/cyan] {data['id']}")
-                    console.print(f"[cyan]{get_text('CONTAINER_INFO_NAME')}[/cyan] {data['name']}")
-                    console.print(f"[cyan]{get_text('CONTAINER_INFO_IP')}[/cyan] {data['ip']}")
-                    console.print(f"[cyan]{get_text('CONTAINER_INFO_MEMORY')}[/cyan] {data['memory']} MB")
-                    console.print(f"[cyan]{get_text('CONTAINER_INFO_DISK')}[/cyan] {data['rootsize']}")
-                    console.print(f"\n[yellow]{get_text('USEFUL_COMMANDS')}[/yellow]")
-                    enter_cmd = get_text("CMD_ENTER_CONTAINER").format(data['id'])
-                    stop_cmd = get_text("CMD_STOP_CONTAINER").format(data['id'])
-                    start_cmd = get_text("CMD_START_CONTAINER").format(data['id'])
-                    console.print(f"[white]  {enter_cmd}[/white]")
-                    console.print(f"[white]  {stop_cmd}[/white]")
-                    console.print(f"[white]  {start_cmd}[/white]")
+                    # Painel final elegante com informações do container
+                    final_content = f"""[bold green]🎉 Migração Linux → Proxmox LXC concluída![/bold green]
+
+[cyan]📋 Informações do Container:[/cyan]
+[white]   🆔 ID: {data['id']}[/white]
+[white]   🏷️  Nome: {data['name']}[/white]
+[white]   🌐 IP: {data['ip']}[/white]
+[white]   🧠 Memória: {data['memory']} MB[/white]
+[white]   💿 Disco: {data['rootsize']} em {data['storage']}[/white]
+[white]   🔗 Bridge: {data['bridge']}[/white]
+
+[yellow]💡 Comandos Úteis:[/yellow]
+[bright_white]   pct enter {data['id']}    [dim]# Entrar no container[/dim][/bright_white]
+[bright_white]   pct stop {data['id']}     [dim]# Parar container[/dim][/bright_white]
+[bright_white]   pct start {data['id']}    [dim]# Iniciar container[/dim][/bright_white]
+[bright_white]   pct status {data['id']}   [dim]# Status do container[/dim][/bright_white]"""
+                    
+                    console.print()
+                    console.print(Panel(
+                        final_content,
+                        title="[bold green]🏆 MIGRAÇÃO CONCLUÍDA[/bold green]",
+                        border_style="green",
+                        padding=(1, 2),
+                        width=80
+                    ))
                     
                 else:
-                    display_warning("CONTAINER_CREATED_START_FAILED")
-                    manual_start = get_text("MANUAL_START").format(data['id'])
-                    console.print(f"[yellow]{manual_start}[/yellow]")
+                    # Container criado mas falha ao iniciar
+                    warning_content = f"""[yellow]⚠️  Container criado mas falha ao iniciar[/yellow]
+
+[cyan]📋 Container Criado:[/cyan]
+[white]   🆔 ID: {data['id']}[/white]
+[white]   🏷️  Nome: {data['name']}[/white]
+[white]   📦 Status: Criado mas parado[/white]
+
+[yellow]💡 Para iniciar manualmente:[/yellow]
+[bright_white]   pct start {data['id']}[/bright_white]
+
+[dim]Erro de inicialização: {start_result.stderr.strip() if start_result.stderr else 'Desconhecido'}[/dim]"""
+                    
+                    console.print()
+                    console.print(Panel(
+                        warning_content,
+                        title="[bold yellow]⚠️  CONTAINER CRIADO[/bold yellow]",
+                        border_style="yellow",
+                        padding=(1, 2)
+                    ))
                 
                 return True
             else:
