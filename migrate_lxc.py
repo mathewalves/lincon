@@ -945,6 +945,43 @@ def validate_parameters(data):
         
     return True
 
+def check_storage_space(storage_name, required_size):
+    """Verifica se há espaço suficiente no storage"""
+    try:
+        result = subprocess.run(["pvesm", "status"], capture_output=True, text=True, check=True)
+        
+        for line in result.stdout.splitlines()[1:]:  # Pula o cabeçalho
+            parts = line.split()
+            if len(parts) >= 6:
+                name, type_, status, total, used, avail = parts[0:6]
+                
+                if name == storage_name and status == "active":
+                    # Converte tamanho disponível para bytes
+                    avail_bytes = parse_size(avail)
+                    required_bytes = parse_size(required_size)
+                    
+                    if avail_bytes < required_bytes:
+                        return False, f"Storage {storage_name} tem apenas {avail} disponível, mas precisa de {required_size}"
+                    return True, f"Storage {storage_name} tem {avail} disponível, suficiente para {required_size}"
+        
+        return False, f"Storage {storage_name} não encontrado ou inativo"
+        
+    except subprocess.CalledProcessError:
+        return False, "Erro ao verificar status do storage"
+
+def parse_size(size_str):
+    """Converte string de tamanho (ex: 20G, 500M) para bytes"""
+    size_str = size_str.upper()
+    
+    if size_str.endswith('G'):
+        return int(float(size_str[:-1]) * 1024 * 1024 * 1024)
+    elif size_str.endswith('M'):
+        return int(float(size_str[:-1]) * 1024 * 1024)
+    elif size_str.endswith('K'):
+        return int(float(size_str[:-1]) * 1024)
+    else:
+        return int(size_str)
+
 def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
     excluded_paths = [
@@ -986,6 +1023,21 @@ def collect_fs(ssh_command):
 
 def convert(data):
     """Converte e cria o container"""
+    
+    # Verifica espaço no storage antes de começar
+    console.print(f"\n[cyan]🔍 Verificando espaço no storage...[/cyan]")
+    has_space, space_msg = check_storage_space(data['storage'], data['rootsize'])
+    
+    if not has_space:
+        console.print(Panel(f"❌ {space_msg}", title="❌ ERRO", style="red"))
+        console.print(f"[yellow]💡 Soluções:[/yellow]")
+        console.print(f"   • Escolha um storage com mais espaço")
+        console.print(f"   • Reduza o tamanho do disco (atualmente {data['rootsize']})")
+        console.print(f"   • Libere espaço no storage atual")
+        return False
+    
+    console.print(f"[green]✅ {space_msg}[/green]")
+    
     with tempfile.NamedTemporaryFile(prefix=f"{data['name']}_migration_", suffix=".tar.gz") as temp_file:
         console.print(f"\n[cyan]{get_text('MIGRATION_STARTING')}[/cyan]")
         
@@ -1133,6 +1185,39 @@ def convert(data):
             else:
                 error_msg = get_text("CONTAINER_CREATE_FAILED").format(result.stderr)
                 console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
+                
+                # Análise específica do erro
+                if "no such logical volume" in result.stderr:
+                    console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
+                    console.print(f"   • O storage {data['storage']} não tem espaço suficiente")
+                    console.print(f"   • Tamanho solicitado: {data['rootsize']}")
+                    console.print(f"   • Verifique o espaço disponível com: pvesm status")
+                    
+                    # Verifica espaço atual
+                    has_space, space_msg = check_storage_space(data['storage'], data['rootsize'])
+                    if not has_space:
+                        console.print(f"[red]   • {space_msg}[/red]")
+                    
+                    console.print(f"[yellow]💡 Soluções:[/yellow]")
+                    console.print(f"   • Escolha um storage com mais espaço")
+                    console.print(f"   • Reduza o tamanho do disco (atualmente {data['rootsize']})")
+                    console.print(f"   • Libere espaço no storage atual")
+                    console.print(f"   • Use um storage diferente (ex: local-lvm, local)")
+                
+                elif "already exists" in result.stderr:
+                    console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
+                    console.print(f"   • Container ID {data['id']} já existe")
+                    console.print(f"[yellow]💡 Soluções:[/yellow]")
+                    console.print(f"   • Escolha outro ID de container")
+                    console.print(f"   • Remova o container existente: pct destroy {data['id']}")
+                
+                elif "permission denied" in result.stderr:
+                    console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
+                    console.print(f"   • Problema de permissões no Proxmox")
+                    console.print(f"[yellow]💡 Soluções:[/yellow]")
+                    console.print(f"   • Execute como root: sudo lincon")
+                    console.print(f"   • Verifique permissões do usuário no Proxmox")
+                
                 display_recommendation("CONTAINER_CREATE_REC")
                 return False
                 
