@@ -1044,7 +1044,7 @@ def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
     excluded_paths = [
         "/proc",
-        "/sys",
+        "/sys", 
         "/dev",
         "/tmp",
         "/run",
@@ -1056,31 +1056,82 @@ def collect_fs(ssh_command):
         "/swap.img"
     ]
     
-    tar_command = [
+    # Constrói comando tar como string para melhor controle
+    tar_parts = [
         "tar",
         "czpf", "-",
         "--warning=no-file-changed",
-        "--warning=no-file-removed",
-        "--warning=no-file-link-changed",
+        "--warning=no-file-removed", 
         "--one-file-system",
         "--ignore-failed-read",
         "--numeric-owner",
-        "--exclude-caches",
-        "--remove-files-protection=absolute",  # Silencia mensagens de remoção
-        "2>/dev/null"  # Redireciona stderr para silenciar avisos
+        "--exclude-caches"
     ]
     
-    # Adiciona exclusões sem --anchored para melhor compatibilidade
+    # Adiciona exclusões
     for path in excluded_paths:
-        tar_command.extend(["--exclude", path])
+        tar_parts.extend(["--exclude", path])
     
-    tar_command.append("/")
+    # Adiciona diretório raiz
+    tar_parts.append("/")
     
-    # Ajusta comando para diferentes tipos de SSH - silencia stderr do tar
-    remote_cmd = " ".join(tar_command[:-1]) + " / 2>/dev/null"
+    # Monta comando completo com redirecionamento de stderr
+    remote_cmd = " ".join(tar_parts) + " 2>/dev/null"
     ssh_command.append(remote_cmd)
     
-    return subprocess.Popen(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    # Debug: mostra comando completo que será executado
+    console.print(f"[dim]🔧 Comando tar remoto: {remote_cmd[:100]}...[/dim]")
+    
+    return subprocess.Popen(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+def diagnose_ssh_connection(data):
+    """Diagnóstica problemas de conexão SSH antes da migração"""
+    console.print(f"\n[cyan]🔧 Executando diagnóstico SSH completo...[/cyan]")
+    
+    # Monta comando SSH base
+    ssh_base = [
+        "sshpass", "-p", data["passwordSSH"],
+        "ssh", "-p", data["port"],
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=10",
+        f"root@{data['target']}"
+    ]
+    
+    tests = [
+        ("🔌 Teste de conectividade básica", ["echo 'SSH_OK'"]),
+        ("📋 Verificando usuário", ["whoami"]),
+        ("💿 Testando comando tar", ["tar --version | head -1"]),
+        ("📁 Verificando diretório raiz", ["ls -la / | head -5"]),
+        ("💾 Verificando espaço em disco", ["df -h / | head -2"])
+    ]
+    
+    all_passed = True
+    
+    for test_name, test_cmd in tests:
+        console.print(f"[dim]{test_name}...[/dim]")
+        try:
+            result = subprocess.run(
+                ssh_base + test_cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=15
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout.strip()
+                console.print(f"[dim]   ✅ {output[:60]}{'...' if len(output) > 60 else ''}[/dim]")
+            else:
+                console.print(f"[yellow]   ❌ Falhou: {result.stderr.strip()[:60]}[/yellow]")
+                all_passed = False
+                
+        except subprocess.TimeoutExpired:
+            console.print(f"[red]   ⏰ Timeout[/red]")
+            all_passed = False
+        except Exception as e:
+            console.print(f"[red]   ❌ Erro: {str(e)[:60]}[/red]")
+            all_passed = False
+    
+    return all_passed
 
 def convert(data):
     """Converte e cria o container"""
@@ -1098,6 +1149,19 @@ def convert(data):
         return False
     
     console.print(f"[green]✅ {space_msg}[/green]")
+    
+    # Executa diagnóstico SSH completo
+    if not diagnose_ssh_connection(data):
+        console.print()
+        console.print(Panel(
+            "[red]❌ Diagnóstico SSH falhou[/red]\n\n[yellow]Corrija os problemas acima antes de continuar a migração.[/yellow]",
+            title="[bold red]❌ ERRO DE CONECTIVIDADE[/bold red]",
+            border_style="red",
+            padding=(1, 2)
+        ))
+        return False
+    
+    console.print(f"\n[green]✅ Diagnóstico SSH passou - prosseguindo com migração[/green]")
     
     with tempfile.NamedTemporaryFile(prefix=f"{data['name']}_migration_", suffix=".tar.gz") as temp_file:
         console.print(f"\n[cyan]{get_text('MIGRATION_STARTING')}[/cyan]")
@@ -1131,6 +1195,31 @@ def convert(data):
         
         try:
             start_time = time.time()
+            
+            # Debug: mostra comando SSH que será executado
+            console.print(f"[dim]🔧 Debug - Comando SSH: {' '.join(ssh_command[:-1])} '[COMANDO_TAR]'[/dim]")
+            
+            # Testa conectividade SSH antes da coleta
+            console.print(f"[dim]🔧 Testando conectividade SSH...[/dim]")
+            test_ssh = ssh_command[:-1] + ["echo 'Conexão SSH OK'"]
+            test_result = subprocess.run(test_ssh, capture_output=True, text=True, timeout=10)
+            
+            if test_result.returncode != 0:
+                console.print(f"[red]❌ Erro na conectividade SSH: {test_result.stderr}[/red]")
+                return False
+            else:
+                console.print(f"[dim]✅ SSH conectado: {test_result.stdout.strip()}[/dim]")
+            
+            # Testa comando tar básico no servidor remoto
+            console.print(f"[dim]🔧 Testando comando tar no servidor remoto...[/dim]")
+            test_tar = ssh_command[:-1] + ["tar --version | head -1"]
+            tar_test_result = subprocess.run(test_tar, capture_output=True, text=True, timeout=10)
+            
+            if tar_test_result.returncode == 0:
+                console.print(f"[dim]✅ Tar disponível: {tar_test_result.stdout.strip()}[/dim]")
+            else:
+                console.print(f"[yellow]⚠️  Aviso - tar test: {tar_test_result.stderr}[/yellow]")
+            
             process = collect_fs(ssh_command)
             
             # Interface moderna de progresso
@@ -1173,9 +1262,38 @@ def convert(data):
                                 )
                                 last_update = current_time
             
-            if process.wait() != 0:
-                display_error("FILESYSTEM_COLLECTION_FAILED")
-                display_recommendation("FILESYSTEM_COLLECTION_REC")
+            # Aguarda o processo e captura erros
+            return_code = process.wait()
+            if return_code != 0:
+                # Captura stderr se disponível
+                stderr_output = ""
+                if process.stderr:
+                    try:
+                        stderr_output = process.stderr.read().decode('utf-8', errors='ignore').strip()
+                    except:
+                        stderr_output = "Não foi possível capturar o erro"
+                
+                # Mostra erro detalhado
+                error_content = f"""[red]❌ Falha na coleta do sistema de arquivos[/red]
+
+[yellow]🔍 Detalhes do Erro:[/yellow]
+[white]   📡 Código de retorno: {return_code}[/white]
+[white]   📝 Saída de erro: {stderr_output or 'Sem detalhes específicos'}[/white]
+
+[cyan]🔧 Possíveis Causas:[/cyan]
+[white]   • Conexão SSH instável ou interrompida[/white]
+[white]   • Permissões insuficientes no servidor origem[/white]
+[white]   • Falta de espaço no diretório temporário[/white]
+[white]   • Problema com o comando tar no servidor remoto[/white]"""
+                
+                console.print()
+                console.print(Panel(
+                    error_content,
+                    title="[bold red]❌ ERRO NA COLETA[/bold red]",
+                    border_style="red",
+                    padding=(1, 2)
+                ))
+                
                 return False
                 
             file_size = os.path.getsize(temp_file.name)
@@ -1342,9 +1460,52 @@ def convert(data):
                 display_recommendation("CONTAINER_CREATE_REC")
                 return False
                 
+        except subprocess.TimeoutExpired:
+            error_content = """[red]❌ Timeout durante migração[/red]
+
+[yellow]🔍 Possíveis Causas:[/yellow]
+[white]   • Conexão SSH muito lenta ou instável[/white]
+[white]   • Sistema de arquivos muito grande[/white]
+[white]   • Servidor remoto sobrecarregado[/white]
+
+[cyan]💡 Soluções:[/cyan]
+[white]   • Verifique a conectividade de rede[/white]
+[white]   • Tente novamente em um horário diferente[/white]
+[white]   • Considere migrar diretórios específicos[/white]"""
+            
+            console.print()
+            console.print(Panel(
+                error_content,
+                title="[bold red]⏰ TIMEOUT[/bold red]",
+                border_style="red",
+                padding=(1, 2)
+            ))
+            return False
+            
+        except KeyboardInterrupt:
+            console.print(f"\n[yellow]⚠️  Migração interrompida pelo usuário[/yellow]")
+            return False
+            
         except Exception as e:
-            error_msg = get_text("CONVERSION_ERROR").format(e)
-            console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
+            error_content = f"""[red]❌ Erro inesperado durante conversão[/red]
+
+[yellow]🔍 Detalhes do Erro:[/yellow]
+[white]   📝 Tipo: {type(e).__name__}[/white]
+[white]   📄 Mensagem: {str(e)}[/white]
+
+[cyan]💡 Ações Recomendadas:[/cyan]
+[white]   • Verifique conectividade SSH[/white]
+[white]   • Confirme permissões no servidor origem[/white]
+[white]   • Tente executar novamente[/white]
+[white]   • Consulte logs para mais detalhes[/white]"""
+            
+            console.print()
+            console.print(Panel(
+                error_content,
+                title="[bold red]❌ ERRO INESPERADO[/bold red]",
+                border_style="red",
+                padding=(1, 2)
+            ))
             return False
 
 def confirm_migration(data):
