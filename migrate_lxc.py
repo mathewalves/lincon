@@ -950,28 +950,48 @@ def check_storage_space(storage_name, required_size):
     try:
         result = subprocess.run(["pvesm", "status"], capture_output=True, text=True, check=True)
         
+        # Debug: mostra a saída completa para entender o formato
+        console.print(f"[dim]🔍 Debug - Saída do pvesm status:[/dim]")
+        for line in result.stdout.splitlines():
+            console.print(f"[dim]   {line}[/dim]")
+        
         for line in result.stdout.splitlines()[1:]:  # Pula o cabeçalho
             parts = line.split()
             if len(parts) >= 6:
                 name, type_, status, total, used, avail = parts[0:6]
+                
+                console.print(f"[dim]🔍 Debug - Storage: {name}, Tipo: {type_}, Status: {status}, Total: {total}, Usado: {used}, Disponível: {avail}[/dim]")
                 
                 if name == storage_name and status == "active":
                     # Converte tamanho disponível para bytes
                     avail_bytes = parse_size(avail)
                     required_bytes = parse_size(required_size)
                     
+                    console.print(f"[dim]🔍 Debug - Disponível em bytes: {avail_bytes}, Necessário em bytes: {required_bytes}[/dim]")
+                    
+                    # Converte para formato legível
+                    avail_readable = format_size(avail_bytes)
+                    required_readable = format_size(required_bytes)
+                    
                     if avail_bytes < required_bytes:
-                        return False, f"Storage {storage_name} tem apenas {avail} disponível, mas precisa de {required_size}"
-                    return True, f"Storage {storage_name} tem {avail} disponível, suficiente para {required_size}"
-        
+                        return False, f"Storage {storage_name} tem apenas {avail_readable} disponível, mas precisa de {required_readable}"
+                    return True, f"Storage {storage_name} tem {avail_readable} disponível, suficiente para {required_readable}"
         return False, f"Storage {storage_name} não encontrado ou inativo"
         
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
+        console.print(f"[dim]🔍 Debug - Erro ao executar pvesm status: {e}[/dim]")
         return False, "Erro ao verificar status do storage"
+    except Exception as e:
+        console.print(f"[dim]🔍 Debug - Erro inesperado: {e}[/dim]")
+        return False, f"Erro inesperado: {e}"
 
 def parse_size(size_str):
-    """Converte string de tamanho (ex: 20G, 500M) para bytes"""
-    size_str = size_str.upper()
+    """Converte string de tamanho (ex: 200412836 para bytes)"""
+    size_str = str(size_str).upper().strip()
+    
+    # Se é apenas números, assume bytes
+    if size_str.isdigit():
+        return int(size_str)
     
     if size_str.endswith('G'):
         return int(float(size_str[:-1]) * 1024 * 1024 * 1024)
@@ -980,7 +1000,22 @@ def parse_size(size_str):
     elif size_str.endswith('K'):
         return int(float(size_str[:-1]) * 1024)
     else:
-        return int(size_str)
+        # Tenta converter como bytes
+        try:
+            return int(size_str)
+        except ValueError:
+            return 0
+
+def format_size(bytes_size):
+    """Converte bytes para formato legível (ex: 2.3G, 500M)"""
+    if bytes_size >= 1024**3:
+        return f"{bytes_size / (1024**3):.1f}G"
+    elif bytes_size >= 1024**2:
+        return f"{bytes_size / (1024**2):.1f}M"
+    elif bytes_size >= 1024:
+        return f"{bytes_size / 1024:.1f}K"
+    else:
+        return f"{bytes_size}B"
 
 def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
