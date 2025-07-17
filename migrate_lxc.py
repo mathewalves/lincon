@@ -948,9 +948,11 @@ def validate_parameters(data):
 def parse_proxmox_size(size_str):
     """Converte tamanho do Proxmox (pvesm status) para bytes"""
     size_str = str(size_str).strip()
+    
     if size_str.isdigit():
-        return int(size_str)
-    # Suporte a formatos tipo '20.96G', '500M', '100K', '123B'
+        # Proxmox retorna em KB se for só número
+        return int(size_str) * 1024
+    
     size_str = size_str.upper().replace(',', '.')
     try:
         if size_str.endswith('G'):
@@ -1002,21 +1004,17 @@ def check_storage_space(storage_name, required_size):
     """Verifica se há espaço suficiente no storage"""
     try:
         result = subprocess.run(["pvesm", "status"], capture_output=True, text=True, check=True)
-        console.print(f"[dim]🔍 Debug - Saída do pvesm status:[/dim]")
-        for line in result.stdout.splitlines():
-            console.print(f"[dim]   {line}[/dim]")
         available_storages = []
         for line in result.stdout.splitlines()[1:]:  # Pula o cabeçalho
             parts = line.split()
             if len(parts) >= 6:
                 name, type_, status, total, used, avail = parts[0:6]
-                console.print(f"[dim]🔍 Debug - Storage: {name}, Tipo: {type_}, Status: {status}, Total: {total}, Usado: {used}, Disponível: {avail}[/dim]")
                 if name == storage_name and status == "active":
                     # Usa parse_proxmox_size para total e avail
                     avail_bytes = parse_proxmox_size(avail)
                     required_bytes = parse_size(required_size)
                     total_bytes = parse_proxmox_size(total)
-                    console.print(f"[dim]🔍 Debug - Disponível em bytes: {avail_bytes}, Necessário em bytes: {required_bytes}[/dim]")
+                    console.print(f"[dim]🔍 Debug - Storage {name}: {format_size(avail_bytes)} disponível, {format_size(required_bytes)} necessário[/dim]")
                     avail_readable = format_size(avail_bytes)
                     required_readable = format_size(required_bytes)
                     total_readable = format_size(total_bytes)
