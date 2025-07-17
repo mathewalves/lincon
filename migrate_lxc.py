@@ -945,45 +945,26 @@ def validate_parameters(data):
         
     return True
 
-def check_storage_space(storage_name, required_size):
-    """Verifica se há espaço suficiente no storage"""
+def parse_proxmox_size(size_str):
+    """Converte tamanho do Proxmox (pvesm status) para bytes"""
+    size_str = str(size_str).strip()
+    if size_str.isdigit():
+        return int(size_str)
+    # Suporte a formatos tipo '20.96G', '500M', '100K', '123B'
+    size_str = size_str.upper().replace(',', '.')
     try:
-        result = subprocess.run(["pvesm", "status"], capture_output=True, text=True, check=True)
-        
-        # Debug: mostra a saída completa para entender o formato
-        console.print(f"[dim]🔍 Debug - Saída do pvesm status:[/dim]")
-        for line in result.stdout.splitlines():
-            console.print(f"[dim]   {line}[/dim]")
-        
-        for line in result.stdout.splitlines()[1:]:  # Pula o cabeçalho
-            parts = line.split()
-            if len(parts) >= 6:
-                name, type_, status, total, used, avail = parts[0:6]
-                
-                console.print(f"[dim]🔍 Debug - Storage: {name}, Tipo: {type_}, Status: {status}, Total: {total}, Usado: {used}, Disponível: {avail}[/dim]")
-                
-                if name == storage_name and status == "active":
-                    # Converte tamanho disponível para bytes
-                    avail_bytes = parse_size(avail)
-                    required_bytes = parse_size(required_size)
-                    
-                    console.print(f"[dim]🔍 Debug - Disponível em bytes: {avail_bytes}, Necessário em bytes: {required_bytes}[/dim]")
-                    
-                    # Converte para formato legível
-                    avail_readable = format_size(avail_bytes)
-                    required_readable = format_size(required_bytes)
-                    
-                    if avail_bytes < required_bytes:
-                        return False, f"Storage {storage_name} tem apenas {avail_readable} disponível, mas precisa de {required_readable}"
-                    return True, f"Storage {storage_name} tem {avail_readable} disponível, suficiente para {required_readable}"
-        return False, f"Storage {storage_name} não encontrado ou inativo"
-        
-    except subprocess.CalledProcessError as e:
-        console.print(f"[dim]🔍 Debug - Erro ao executar pvesm status: {e}[/dim]")
-        return False, "Erro ao verificar status do storage"
-    except Exception as e:
-        console.print(f"[dim]🔍 Debug - Erro inesperado: {e}[/dim]")
-        return False, f"Erro inesperado: {e}"
+        if size_str.endswith('G'):
+            return int(float(size_str[:-1]) * 1024 * 1024 * 1024)
+        elif size_str.endswith('M'):
+            return int(float(size_str[:-1]) * 1024 * 1024)
+        elif size_str.endswith('K'):
+            return int(float(size_str[:-1]) * 1024)
+        elif size_str.endswith('B'):
+            return int(float(size_str[:-1]))
+        else:
+            return int(size_str)
+    except Exception:
+        return 0
 
 def parse_size(size_str):
     """Converte string de tamanho (ex: 200412836 para bytes)"""
@@ -1016,6 +997,47 @@ def format_size(bytes_size):
         return f"{bytes_size / 1024:.1f}K"
     else:
         return f"{bytes_size}B"
+
+def check_storage_space(storage_name, required_size):
+    """Verifica se há espaço suficiente no storage"""
+    try:
+        result = subprocess.run(["pvesm", "status"], capture_output=True, text=True, check=True)
+        console.print(f"[dim]🔍 Debug - Saída do pvesm status:[/dim]")
+        for line in result.stdout.splitlines():
+            console.print(f"[dim]   {line}[/dim]")
+        available_storages = []
+        for line in result.stdout.splitlines()[1:]:  # Pula o cabeçalho
+            parts = line.split()
+            if len(parts) >= 6:
+                name, type_, status, total, used, avail = parts[0:6]
+                console.print(f"[dim]🔍 Debug - Storage: {name}, Tipo: {type_}, Status: {status}, Total: {total}, Usado: {used}, Disponível: {avail}[/dim]")
+                if name == storage_name and status == "active":
+                    # Usa parse_proxmox_size para total e avail
+                    avail_bytes = parse_proxmox_size(avail)
+                    required_bytes = parse_size(required_size)
+                    total_bytes = parse_proxmox_size(total)
+                    console.print(f"[dim]🔍 Debug - Disponível em bytes: {avail_bytes}, Necessário em bytes: {required_bytes}[/dim]")
+                    avail_readable = format_size(avail_bytes)
+                    required_readable = format_size(required_bytes)
+                    total_readable = format_size(total_bytes)
+                    if avail_bytes < required_bytes:
+                        return False, f"Storage {storage_name} tem apenas {avail_readable} disponível (total: {total_readable}), mas precisa de {required_readable}"
+                    return True, f"Storage {storage_name} tem {avail_readable} disponível, suficiente para {required_readable}"
+                if status == "active" and type_ in ["dir", "lvm", "lvmthin", "zfs", "btrfs"]:
+                    avail_bytes = parse_proxmox_size(avail)
+                    avail_readable = format_size(avail_bytes)
+                    available_storages.append((name, avail_readable, avail_bytes))
+        if available_storages:
+            console.print(f"[yellow]💡 Storages disponíveis:[/yellow]")
+            for name, size, bytes_size in sorted(available_storages, key=lambda x: x[2], reverse=True):
+                console.print(f"   • {name}: {size} disponível")
+        return False, f"Storage {storage_name} não encontrado ou inativo"
+    except subprocess.CalledProcessError as e:
+        console.print(f"[dim]🔍 Debug - Erro ao executar pvesm status: {e}[/dim]")
+        return False, "Erro ao verificar status do storage"
+    except Exception as e:
+        console.print(f"[dim]🔍 Debug - Erro inesperado: {e}[/dim]")
+        return False, f"Erro inesperado: {e}"
 
 def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
