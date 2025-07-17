@@ -325,6 +325,62 @@ def validate_ip(ip):
     parts = ip.split('.')
     return all(0 <= int(part) <= 255 for part in parts)
 
+def validate_hostname(hostname):
+    """Valida formato de hostname/IP"""
+    if not hostname or len(hostname.strip()) == 0:
+        return False
+    
+    hostname = hostname.strip()
+    
+    # Verifica se é um IP válido
+    if validate_ip(hostname):
+        return True
+    
+    # Verifica se é um hostname válido
+    # Hostnames podem conter letras, números, hífens e pontos
+    # Não podem começar ou terminar com hífen
+    # Cada parte (separada por ponto) deve ter entre 1-63 caracteres
+    # Comprimento total não deve exceder 253 caracteres
+    
+    if len(hostname) > 253:
+        return False
+    
+    # Remove ponto final se presente (FQDN)
+    if hostname.endswith('.'):
+        hostname = hostname[:-1]
+    
+    # Divide em partes separadas por ponto
+    parts = hostname.split('.')
+    
+    for part in parts:
+        if not part or len(part) > 63:
+            return False
+        
+        # Não pode começar ou terminar com hífen
+        if part.startswith('-') or part.endswith('-'):
+            return False
+        
+        # Deve conter apenas letras, números e hífens
+        if not re.match(r'^[a-zA-Z0-9-]+$', part):
+            return False
+    
+    return True
+
+def sanitize_hostname(hostname):
+    """Sanitiza hostname para uso em comandos SSH"""
+    if not hostname:
+        return hostname
+    
+    # Remove espaços em branco
+    hostname = hostname.strip()
+    
+    # Se contém espaços ou caracteres especiais, tenta envolver em aspas
+    if ' ' in hostname or any(c in hostname for c in ['&', '|', ';', '(', ')', '<', '>', '$', '`']):
+        # Para SSH, é melhor rejeitar hostnames com caracteres especiais
+        return None
+    
+    return hostname
+
 def validate_port(port):
     """Valida porta SSH"""
     try:
@@ -773,7 +829,45 @@ def user_input():
         target = Prompt.ask(get_text("SOURCE_HOST_PROMPT"))
         
         if target:
-            data["target"] = target
+            # Sanitiza e valida hostname
+            sanitized_target = sanitize_hostname(target)
+            if sanitized_target is None:
+                console.print(Panel(
+                    "❌ Hostname contém caracteres inválidos!\n\n"
+                    "🔍 Problemas detectados:\n"
+                    "• Espaços em branco\n"
+                    "• Caracteres especiais (&, |, ;, etc.)\n\n"
+                    "💡 Use apenas:\n"
+                    "• IP (ex: 192.168.1.100)\n"
+                    "• Hostname válido (ex: server.domain.com)\n"
+                    "• Letras, números, hífens e pontos",
+                    title="❌ HOSTNAME INVÁLIDO",
+                    style="red"
+                ))
+                if not Confirm.ask(get_text("TRY_AGAIN")):
+                    return None
+                continue
+            
+            if not validate_hostname(sanitized_target):
+                console.print(Panel(
+                    "❌ Formato de hostname/IP inválido!\n\n"
+                    "✅ Exemplos válidos:\n"
+                    "• 192.168.1.100\n"
+                    "• server.domain.com\n"
+                    "• hostname\n"
+                    "• my-server.local\n\n"
+                    "❌ Evite:\n"
+                    "• Nomes muito longos (>253 chars)\n"
+                    "• Hífen no início/fim\n"
+                    "• Caracteres especiais",
+                    title="❌ FORMATO INVÁLIDO",
+                    style="red"
+                ))
+                if not Confirm.ask(get_text("TRY_AGAIN")):
+                    return None
+                continue
+            
+            data["target"] = sanitized_target
             break
         else:
             display_warning("HOST_CANNOT_EMPTY")
@@ -923,6 +1017,20 @@ def validate_parameters(data):
     # Validações específicas
     if not validate_ct_id(data["id"]):
         display_error("INVALID_ID")
+        return False
+        
+    if not validate_hostname(data["target"]):
+        console.print(Panel(
+            "❌ Hostname/IP de origem inválido!\n\n"
+            "Verifique se o hostname contém apenas caracteres válidos:\n"
+            "• Letras (a-z, A-Z)\n"
+            "• Números (0-9)\n"
+            "• Hífens (-)\n"
+            "• Pontos (.)\n\n"
+            "Ou use um endereço IP válido.",
+            title="❌ HOSTNAME INVÁLIDO",
+            style="red"
+        ))
         return False
         
     if not validate_port(data["port"]):
@@ -1205,7 +1313,36 @@ def convert(data):
             test_result = subprocess.run(test_ssh, capture_output=True, text=True, timeout=10)
             
             if test_result.returncode != 0:
-                console.print(f"[red]❌ Erro na conectividade SSH: {test_result.stderr}[/red]")
+                error_msg = test_result.stderr.strip()
+                
+                # Detecta erros específicos de hostname
+                if "hostname contains invalid characters" in error_msg.lower():
+                    console.print(Panel(
+                        f"❌ Erro de hostname inválido!\n\n"
+                        f"🔍 Hostname problemático: {data['target']}\n\n"
+                        f"💡 Soluções:\n"
+                        f"• Verifique se não há espaços no hostname\n"
+                        f"• Use apenas letras, números, hífens e pontos\n"
+                        f"• Tente usar o IP direto (ex: 192.168.1.100)\n"
+                        f"• Verifique a configuração DNS\n\n"
+                        f"📋 Erro SSH: {error_msg}",
+                        title="❌ HOSTNAME CONTÉM CARACTERES INVÁLIDOS",
+                        style="red"
+                    ))
+                elif "could not resolve hostname" in error_msg.lower():
+                    console.print(Panel(
+                        f"❌ Não foi possível resolver o hostname!\n\n"
+                        f"🔍 Hostname: {data['target']}\n\n"
+                        f"💡 Soluções:\n"
+                        f"• Verifique se o hostname está correto\n"
+                        f"• Teste com ping: ping {data['target']}\n"
+                        f"• Use o IP direto se possível\n"
+                        f"• Verifique a configuração DNS",
+                        title="❌ HOSTNAME NÃO ENCONTRADO",
+                        style="red"
+                    ))
+                else:
+                    console.print(f"[red]❌ Erro na conectividade SSH: {error_msg}[/red]")
                 return False
             else:
                 console.print(f"[dim]✅ SSH conectado: {test_result.stdout.strip()}[/dim]")

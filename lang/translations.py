@@ -510,7 +510,12 @@ translations = {
         "SSH_RETEST_CONNECTION": "Testar conexão novamente?",
         "SSH_SKIP_FOR_NOW": "Pular SSH por enquanto e continuar?",
         "SSH_RESET_AND_TRY": "Resetar configurações SSH e tentar novamente?",
-        "SSH_PERSISTENT_ISSUE": "Problema SSH persistente detectado"
+        "SSH_PERSISTENT_ISSUE": "Problema SSH persistente detectado",
+        
+        # Hostname validation
+        "INVALID_HOSTNAME": "Hostname inválido!",
+        "HOSTNAME_VALIDATION_ERROR": "Hostname contém caracteres inválidos ou formato inválido",
+        "HOSTNAME_SUGGESTIONS": "Use apenas letras, números, hífens e pontos. Evite espaços e caracteres especiais."
     },
     "en": {
         # menu
@@ -1023,6 +1028,11 @@ translations = {
         "SSH_RETEST_CONNECTION": "Test connection again?",
         "SSH_SKIP_FOR_NOW": "Skip SSH for now and continue?",
         "SSH_RESET_AND_TRY": "Reset SSH settings and try again?",
-        "SSH_PERSISTENT_ISSUE": "Persistent SSH issue detected"
+        "SSH_PERSISTENT_ISSUE": "Persistent SSH issue detected",
+        
+        # Hostname validation
+        "INVALID_HOSTNAME": "Invalid hostname!",
+        "HOSTNAME_VALIDATION_ERROR": "Hostname contains invalid characters or invalid format",
+        "HOSTNAME_SUGGESTIONS": "Use only letters, numbers, hyphens and dots. Avoid spaces and special characters."
     }
 }
