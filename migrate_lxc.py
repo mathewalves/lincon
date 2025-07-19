@@ -233,9 +233,11 @@ def try_alternative_sshpass(target, port, password):
                 console.print(f"   ✅ {method['name']} funcionou!")
                 # Atualizar comando SSH globalmente (remove target e echo de teste)
                 global ssh_method
-                # Remove o target e o echo, mantém apenas o comando base SSH
-                ssh_base = method['cmd'][:-2]  # Remove root@target e echo
+                # Remove o root@target e o comando echo, mantém apenas comando base SSH
+                # O comando tem estrutura: [..., "root@target", "echo 'Conexão OK'"]
+                ssh_base = method['cmd'][:-2]  # Remove os 2 últimos elementos
                 ssh_method = ssh_base
+
                 return True
             else:
                 console.print(f"   ❌ {method['name']} falhou: {result.stderr.strip()}")
@@ -1124,8 +1126,8 @@ def check_storage_space(storage_name, required_size):
                     avail_bytes = parse_proxmox_size(avail)
                     required_bytes = parse_size(required_size)
                     total_bytes = parse_proxmox_size(total)
-                    # Debug silencioso - só mostra se há problema
-                    # console.print(f"[dim]🔍 Debug - Storage {name}: {format_size(avail_bytes)} disponível, {format_size(required_bytes)} necessário[/dim]")
+                    # Log interno para diagnóstico
+                    logger.debug(f"Storage {name}: {format_size(avail_bytes)} disponível, {format_size(required_bytes)} necessário")
                     avail_readable = format_size(avail_bytes)
                     required_readable = format_size(required_bytes)
                     total_readable = format_size(total_bytes)
@@ -1142,10 +1144,10 @@ def check_storage_space(storage_name, required_size):
                 console.print(f"   • {name}: {size} disponível")
         return False, f"Storage {storage_name} não encontrado ou inativo"
     except subprocess.CalledProcessError as e:
-        console.print(f"[dim]🔍 Debug - Erro ao executar pvesm status: {e}[/dim]")
+        logger.error(f"Erro ao executar pvesm status: {e}")
         return False, "Erro ao verificar status do storage"
     except Exception as e:
-        console.print(f"[dim]🔍 Debug - Erro inesperado: {e}[/dim]")
+        logger.error(f"Erro inesperado na verificação de storage: {e}")
         return False, f"Erro inesperado: {e}"
 
 def collect_fs(ssh_command):
@@ -1187,8 +1189,8 @@ def collect_fs(ssh_command):
     remote_cmd = " ".join(tar_parts) + " 2>/dev/null"
     ssh_command.append(remote_cmd)
     
-    # Debug: mostra comando completo que será executado
-    console.print(f"[dim]🔧 Comando tar remoto: {remote_cmd[:100]}...[/dim]")
+    # Log comando para diagnóstico se necessário
+    logger.debug(f"Comando tar remoto: {remote_cmd}")
     
     return subprocess.Popen(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -1216,7 +1218,6 @@ def diagnose_ssh_connection(data):
     all_passed = True
     
     for test_name, test_cmd in tests:
-        console.print(f"[dim]{test_name}...[/dim]")
         try:
             result = subprocess.run(
                 ssh_base + test_cmd, 
@@ -1278,85 +1279,17 @@ def convert(data):
         display_message("TITLE_INFO", "COLLECTING_FILESYSTEM")
         display_recommendation("COLLECTION_TIME_WARNING")
         
-        # Usa método SSH apropriado baseado no diagnóstico
-        global ssh_method, use_ssh_key
-        
-        if use_ssh_key:
-            ssh_command = [
-                "ssh", "-p", data["port"],
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=30",
-                "-o", "ServerAliveInterval=30",
-                f"root@{data['target']}"
-            ]
-        elif ssh_method:
-            ssh_command = ssh_method + [f"root@{data['target']}"]  # Adiciona target ao comando base
-        else:
-            ssh_command = [
-                "sshpass", "-p", data["passwordSSH"],
-                "ssh", "-p", data["port"],
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=30",
-                "-o", "ServerAliveInterval=30",
-                f"root@{data['target']}"
-            ]
+        # Constrói comando SSH baseado no método disponível
+        ssh_command = build_ssh_command(data)
         
         try:
             start_time = time.time()
             
-            # Debug: mostra comando SSH que será executado
-            console.print(f"[dim]🔧 Debug - Comando SSH: {' '.join(ssh_command[:-1])} '[COMANDO_TAR]'[/dim]")
-            
             # Testa conectividade SSH antes da coleta
-            console.print(f"[dim]🔧 Testando conectividade SSH...[/dim]")
-            test_ssh = ssh_command[:-1] + ["echo 'Conexão SSH OK'"]
-            test_result = subprocess.run(test_ssh, capture_output=True, text=True, timeout=10)
-            
-            if test_result.returncode != 0:
-                error_msg = test_result.stderr.strip()
-                
-                # Detecta erros específicos de hostname
-                if "hostname contains invalid characters" in error_msg.lower():
-                    console.print(Panel(
-                        f"❌ Erro de hostname inválido!\n\n"
-                        f"🔍 Hostname problemático: {data['target']}\n\n"
-                        f"💡 Soluções:\n"
-                        f"• Verifique se não há espaços no hostname\n"
-                        f"• Use apenas letras, números, hífens e pontos\n"
-                        f"• Tente usar o IP direto (ex: 192.168.1.100)\n"
-                        f"• Verifique a configuração DNS\n\n"
-                        f"📋 Erro SSH: {error_msg}",
-                        title="❌ HOSTNAME CONTÉM CARACTERES INVÁLIDOS",
-                        style="red"
-                    ))
-                elif "could not resolve hostname" in error_msg.lower():
-                    console.print(Panel(
-                        f"❌ Não foi possível resolver o hostname!\n\n"
-                        f"🔍 Hostname: {data['target']}\n\n"
-                        f"💡 Soluções:\n"
-                        f"• Verifique se o hostname está correto\n"
-                        f"• Teste com ping: ping {data['target']}\n"
-                        f"• Use o IP direto se possível\n"
-                        f"• Verifique a configuração DNS",
-                        title="❌ HOSTNAME NÃO ENCONTRADO",
-                        style="red"
-                    ))
-                else:
-                    console.print(f"[red]❌ Erro na conectividade SSH: {error_msg}[/red]")
+            if not test_ssh_connectivity(ssh_command):
                 return False
-            else:
-                console.print(f"[dim]✅ SSH conectado: {test_result.stdout.strip()}[/dim]")
             
-            # Testa comando tar básico no servidor remoto
-            console.print(f"[dim]🔧 Testando comando tar no servidor remoto...[/dim]")
-            test_tar = ssh_command[:-1] + ["tar --version | head -1"]
-            tar_test_result = subprocess.run(test_tar, capture_output=True, text=True, timeout=10)
-            
-            if tar_test_result.returncode == 0:
-                console.print(f"[dim]✅ Tar disponível: {tar_test_result.stdout.strip()}[/dim]")
-            else:
-                console.print(f"[yellow]⚠️  Aviso - tar test: {tar_test_result.stderr}[/yellow]")
-            
+            # Coleta sistema de arquivos
             process = collect_fs(ssh_command)
             
             # Interface moderna de progresso
@@ -1402,16 +1335,106 @@ def convert(data):
             # Aguarda o processo e captura erros
             return_code = process.wait()
             if return_code != 0:
-                # Captura stderr se disponível
-                stderr_output = ""
-                if process.stderr:
-                    try:
-                        stderr_output = process.stderr.read().decode('utf-8', errors='ignore').strip()
-                    except:
-                        stderr_output = "Não foi possível capturar o erro"
+                handle_collection_error(process, return_code)
+                return False
                 
-                # Mostra erro detalhado
-                error_content = f"""[red]❌ Falha na coleta do sistema de arquivos[/red]
+            file_size = os.path.getsize(temp_file.name)
+            if file_size == 0:
+                display_error("BACKUP_FILE_EMPTY")
+                return False
+            
+            # Mostra estatísticas da transferência
+            show_transfer_stats(file_size, start_time)
+            
+            # Cria container LXC
+            return create_lxc_container(data, temp_file.name)
+                
+        except subprocess.TimeoutExpired:
+            handle_timeout_error()
+            return False
+            
+        except KeyboardInterrupt:
+            console.print(f"\n[yellow]⚠️  Migração interrompida pelo usuário[/yellow]")
+            return False
+                
+        except Exception as e:
+            handle_unexpected_error(e)
+            return False
+
+
+def build_ssh_command(data):
+    """Constrói comando SSH baseado no método disponível"""
+    global ssh_method, use_ssh_key
+    
+    if use_ssh_key:
+        return [
+            "ssh", "-p", data["port"],
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=30",
+            "-o", "ServerAliveInterval=30",
+            f"root@{data['target']}"
+        ]
+    elif ssh_method:
+        return ssh_method + [f"root@{data['target']}"]
+    else:
+        return [
+            "sshpass", "-p", data["passwordSSH"],
+            "ssh", "-p", data["port"],
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=30",
+            "-o", "ServerAliveInterval=30",
+            f"root@{data['target']}"
+        ]
+
+
+def test_ssh_connectivity(ssh_command):
+    """Testa conectividade SSH antes da migração"""
+    test_ssh = ssh_command + ["echo 'Conexão SSH OK'"]
+    test_result = subprocess.run(test_ssh, capture_output=True, text=True, timeout=10)
+    
+    if test_result.returncode != 0:
+        error_msg = test_result.stderr.strip()
+        
+        if "hostname contains invalid characters" in error_msg.lower():
+            console.print(Panel(
+                f"❌ Erro de hostname inválido detectado pelo SSH!\n\n"
+                f"💡 Soluções:\n"
+                f"• Verifique se não há espaços no hostname\n"
+                f"• Use apenas letras, números, hífens e pontos\n"
+                f"• Tente usar o IP direto se possível\n"
+                f"• Verifique a configuração DNS\n\n"
+                f"📋 Erro SSH: {error_msg}",
+                title="❌ HOSTNAME INVÁLIDO",
+                style="red"
+            ))
+        elif "could not resolve hostname" in error_msg.lower():
+            console.print(Panel(
+                f"❌ Não foi possível resolver o hostname!\n\n"
+                f"💡 Soluções:\n"
+                f"• Verifique se o hostname está correto\n"
+                f"• Teste com ping primeiro\n"
+                f"• Use o IP direto se possível\n"
+                f"• Verifique a configuração DNS",
+                title="❌ HOSTNAME NÃO ENCONTRADO",
+                style="red"
+            ))
+        else:
+            console.print(f"[red]❌ Erro na conectividade SSH: {error_msg}[/red]")
+        return False
+    
+    return True
+
+
+def handle_collection_error(process, return_code):
+    """Trata erros na coleta do sistema de arquivos"""
+    stderr_output = ""
+    if process.stderr:
+        try:
+            stderr_output = process.stderr.read().decode('utf-8', errors='ignore').strip()
+        except:
+            stderr_output = "Não foi possível capturar o erro"
+    
+    error_content = f"""[red]❌ Falha na coleta do sistema de arquivos[/red]
 
 [yellow]🔍 Detalhes do Erro:[/yellow]
 [white]   📡 Código de retorno: {return_code}[/white]
@@ -1422,95 +1445,152 @@ def convert(data):
 [white]   • Permissões insuficientes no servidor origem[/white]
 [white]   • Falta de espaço no diretório temporário[/white]
 [white]   • Problema com o comando tar no servidor remoto[/white]"""
-                
-                console.print()
-                console.print(Panel(
-                    error_content,
-                    title="[bold red]❌ ERRO NA COLETA[/bold red]",
-                    border_style="red",
-                    padding=(1, 2)
-                ))
-                
-                return False
-                
-            file_size = os.path.getsize(temp_file.name)
-            if file_size == 0:
-                display_error("BACKUP_FILE_EMPTY")
-                return False
-            
-            elapsed_time = time.time() - start_time
-            size_mb = file_size / (1024 * 1024)
-            speed_mbps = size_mb / elapsed_time if elapsed_time > 0 else 0
-            
-            # Mostra resultado da transferência em painel elegante
-            result_content = f"""[green]✅ Transferência concluída com sucesso![/green]
+    
+    console.print()
+    console.print(Panel(
+        error_content,
+        title="[bold red]❌ ERRO NA COLETA[/bold red]",
+        border_style="red",
+        padding=(1, 2)
+    ))
+
+
+def handle_timeout_error():
+    """Trata erro de timeout na migração"""
+    error_content = """[red]❌ Timeout durante migração[/red]
+
+[yellow]🔍 Possíveis Causas:[/yellow]
+[white]   • Conexão SSH muito lenta ou instável[/white]
+[white]   • Sistema de arquivos muito grande[/white]
+[white]   • Servidor remoto sobrecarregado[/white]
+
+[cyan]💡 Soluções:[/cyan]
+[white]   • Verifique a conectividade de rede[/white]
+[white]   • Tente novamente em um horário diferente[/white]
+[white]   • Considere migrar diretórios específicos[/white]"""
+    
+    console.print()
+    console.print(Panel(
+        error_content,
+        title="[bold red]⏰ TIMEOUT[/bold red]",
+        border_style="red",
+        padding=(1, 2)
+    ))
+
+
+def handle_unexpected_error(e):
+    """Trata erros inesperados"""
+    error_content = f"""[red]❌ Erro inesperado durante conversão[/red]
+
+[yellow]🔍 Detalhes do Erro:[/yellow]
+[white]   📝 Tipo: {type(e).__name__}[/white]
+[white]   📄 Mensagem: {str(e)}[/white]
+
+[cyan]💡 Ações Recomendadas:[/cyan]
+[white]   • Verifique conectividade SSH[/white]
+[white]   • Confirme permissões no servidor origem[/white]
+[white]   • Tente executar novamente[/white]
+[white]   • Consulte logs para mais detalhes[/white]"""
+    
+    console.print()
+    console.print(Panel(
+        error_content,
+        title="[bold red]❌ ERRO INESPERADO[/bold red]",
+        border_style="red",
+        padding=(1, 2)
+    ))
+
+
+def show_transfer_stats(file_size, start_time):
+    """Mostra estatísticas da transferência"""
+    elapsed_time = time.time() - start_time
+    size_mb = file_size / (1024 * 1024)
+    speed_mbps = size_mb / elapsed_time if elapsed_time > 0 else 0
+    
+    result_content = f"""[green]✅ Transferência concluída com sucesso![/green]
 
 [cyan]📊 Estatísticas da Transferência:[/cyan]
 [white]   📦 Tamanho: {size_mb:.1f} MB[/white]
 [white]   ⏱️  Tempo: {elapsed_time:.1f}s[/white]
 [white]   🚀 Velocidade média: {speed_mbps:.1f} MB/s[/white]
 [white]   📁 Arquivo temporário criado[/white]"""
-            
-            console.print()
-            console.print(Panel(
-                result_content,
-                title="[bold green]🎉 Coleta Finalizada[/bold green]",
-                border_style="green",
-                padding=(1, 2)
-            ))
-            
-            # Prepara parâmetros do pct create
-            if data["ip"] == "dhcp":
-                net_param = f"name=eth0,bridge={data['bridge']},ip=dhcp"
-            else:
-                net_param = f"name=eth0,bridge={data['bridge']},ip={data['ip']}/24,gw={data['gateway']}"
-            
-            create_command = [
-                "pct", "create", data["id"], temp_file.name,
-                "--description", f"🐳 LINCON Migration: {data['name']} (from {data['target']}) - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                "--hostname", data["name"],
-                "--features", "nesting=1",
-                "--unprivileged", "0",
-                "--memory", data["memory"],
-                "--nameserver", "8.8.8.8,1.1.1.1",
-                "--net0", net_param,
-                "--rootfs", f"{data['storage']}:{data['rootsize']}",
-                "--password", data["passwordCT"],
-                "--onboot", "1",
-                "--cmode", "shell",
-                "--arch", "amd64"
-            ]
-            
-            # Interface moderna de criação do container
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-                transient=True
-            ) as progress:
-                task = progress.add_task(description="⚙️  Criando container LXC...", total=None)
-                result = subprocess.run(create_command, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                console.print()
-                console.print("[bold green]✅ Container LXC criado com sucesso![/bold green]")
-                
-                # Interface moderna de inicialização
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    console=console,
-                    transient=True
-                ) as progress:
-                    task = progress.add_task(description="🚀 Iniciando container...", total=None)
-                    start_result = subprocess.run(["pct", "start", data["id"]], capture_output=True, text=True)
-                
-                if start_result.returncode == 0:
-                    console.print()
-                    console.print("[bold green]🚀 Container iniciado com sucesso![/bold green]")
-                    
-                    # Painel final elegante com informações do container
-                    final_content = f"""[bold green]🎉 Migração Linux → Proxmox LXC concluída![/bold green]
+    
+    console.print()
+    console.print(Panel(
+        result_content,
+        title="[bold green]🎉 Coleta Finalizada[/bold green]",
+        border_style="green",
+        padding=(1, 2)
+    ))
+
+
+def create_lxc_container(data, temp_file_name):
+    """Cria e configura o container LXC"""
+    # Prepara parâmetros do pct create
+    if data["ip"] == "dhcp":
+        net_param = f"name=eth0,bridge={data['bridge']},ip=dhcp"
+    else:
+        net_param = f"name=eth0,bridge={data['bridge']},ip={data['ip']}/24,gw={data['gateway']}"
+    
+    create_command = [
+        "pct", "create", data["id"], temp_file_name,
+        "--description", f"🐳 LINCON Migration: {data['name']} (from {data['target']}) - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "--hostname", data["name"],
+        "--features", "nesting=1",
+        "--unprivileged", "0",
+        "--memory", data["memory"],
+        "--nameserver", "8.8.8.8,1.1.1.1",
+        "--net0", net_param,
+        "--rootfs", f"{data['storage']}:{data['rootsize']}",
+        "--password", data["passwordCT"],
+        "--onboot", "1",
+        "--cmode", "shell",
+        "--arch", "amd64"
+    ]
+    
+    # Interface moderna de criação do container
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task(description="⚙️  Criando container LXC...", total=None)
+        result = subprocess.run(create_command, capture_output=True, text=True)
+    
+    if result.returncode == 0:
+        console.print()
+        console.print("[bold green]✅ Container LXC criado com sucesso![/bold green]")
+        
+        # Inicia o container
+        return start_lxc_container(data)
+    else:
+        handle_container_creation_error(data, result)
+        return False
+
+
+def start_lxc_container(data):
+    """Inicia o container LXC"""
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task(description="🚀 Iniciando container...", total=None)
+        start_result = subprocess.run(["pct", "start", data["id"]], capture_output=True, text=True)
+    
+    if start_result.returncode == 0:
+        show_migration_success(data)
+        return True
+    else:
+        show_container_created_but_start_failed(data, start_result)
+        return True  # Container foi criado, mesmo que não tenha iniciado
+
+
+def show_migration_success(data):
+    """Mostra painel de sucesso da migração"""
+    final_content = f"""[bold green]🎉 Migração Linux → Proxmox LXC concluída![/bold green]
 
 [cyan]📋 Informações do Container:[/cyan]
 [white]   🆔 ID: {data['id']}[/white]
@@ -1525,19 +1605,20 @@ def convert(data):
 [bright_white]   pct stop {data['id']}     [dim]# Parar container[/dim][/bright_white]
 [bright_white]   pct start {data['id']}    [dim]# Iniciar container[/dim][/bright_white]
 [bright_white]   pct status {data['id']}   [dim]# Status do container[/dim][/bright_white]"""
-                    
-                    console.print()
-                    console.print(Panel(
-                        final_content,
-                        title="[bold green]🏆 MIGRAÇÃO CONCLUÍDA[/bold green]",
-                        border_style="green",
-                        padding=(1, 2),
-                        width=80
-                    ))
-                    
-                else:
-                    # Container criado mas falha ao iniciar
-                    warning_content = f"""[yellow]⚠️  Container criado mas falha ao iniciar[/yellow]
+    
+    console.print()
+    console.print(Panel(
+        final_content,
+        title="[bold green]🏆 MIGRAÇÃO CONCLUÍDA[/bold green]",
+        border_style="green",
+        padding=(1, 2),
+        width=80
+    ))
+
+
+def show_container_created_but_start_failed(data, start_result):
+    """Mostra aviso quando container é criado mas falha ao iniciar"""
+    warning_content = f"""[yellow]⚠️  Container criado mas falha ao iniciar[/yellow]
 
 [cyan]📋 Container Criado:[/cyan]
 [white]   🆔 ID: {data['id']}[/white]
@@ -1548,102 +1629,54 @@ def convert(data):
 [bright_white]   pct start {data['id']}[/bright_white]
 
 [dim]Erro de inicialização: {start_result.stderr.strip() if start_result.stderr else 'Desconhecido'}[/dim]"""
-                    
-                    console.print()
-                    console.print(Panel(
-                        warning_content,
-                        title="[bold yellow]⚠️  CONTAINER CRIADO[/bold yellow]",
-                        border_style="yellow",
-                        padding=(1, 2)
-                    ))
-                
-                return True
-            else:
-                error_msg = get_text("CONTAINER_CREATE_FAILED").format(result.stderr)
-                console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
-                
-                # Análise específica do erro
-                if "no such logical volume" in result.stderr:
-                    console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
-                    console.print(f"   • O storage {data['storage']} não tem espaço suficiente")
-                    console.print(f"   • Tamanho solicitado: {data['rootsize']}")
-                    console.print(f"   • Verifique o espaço disponível com: pvesm status")
-                    
-                    # Verifica espaço atual
-                    has_space, space_msg = check_storage_space(data['storage'], data['rootsize'])
-                    if not has_space:
-                        console.print(f"[red]   • {space_msg}[/red]")
-                    
-                    console.print(f"[yellow]💡 Soluções:[/yellow]")
-                    console.print(f"   • Escolha um storage com mais espaço")
-                    console.print(f"   • Reduza o tamanho do disco (atualmente {data['rootsize']})")
-                    console.print(f"   • Libere espaço no storage atual")
-                    console.print(f"   • Use um storage diferente (ex: local-lvm, local)")
-                
-                elif "already exists" in result.stderr:
-                    console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
-                    console.print(f"   • Container ID {data['id']} já existe")
-                    console.print(f"[yellow]💡 Soluções:[/yellow]")
-                    console.print(f"   • Escolha outro ID de container")
-                    console.print(f"   • Remova o container existente: pct destroy {data['id']}")
-                
-                elif "permission denied" in result.stderr:
-                    console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
-                    console.print(f"   • Problema de permissões no Proxmox")
-                    console.print(f"[yellow]💡 Soluções:[/yellow]")
-                    console.print(f"   • Execute como root: sudo lincon")
-                    console.print(f"   • Verifique permissões do usuário no Proxmox")
-                
-                display_recommendation("CONTAINER_CREATE_REC")
-                return False
-                
-        except subprocess.TimeoutExpired:
-            error_content = """[red]❌ Timeout durante migração[/red]
+    
+    console.print()
+    console.print(Panel(
+        warning_content,
+        title="[bold yellow]⚠️  CONTAINER CRIADO[/bold yellow]",
+        border_style="yellow",
+        padding=(1, 2)
+    ))
 
-[yellow]🔍 Possíveis Causas:[/yellow]
-[white]   • Conexão SSH muito lenta ou instável[/white]
-[white]   • Sistema de arquivos muito grande[/white]
-[white]   • Servidor remoto sobrecarregado[/white]
 
-[cyan]💡 Soluções:[/cyan]
-[white]   • Verifique a conectividade de rede[/white]
-[white]   • Tente novamente em um horário diferente[/white]
-[white]   • Considere migrar diretórios específicos[/white]"""
-            
-            console.print()
-            console.print(Panel(
-                error_content,
-                title="[bold red]⏰ TIMEOUT[/bold red]",
-                border_style="red",
-                padding=(1, 2)
-            ))
-            return False
-            
-        except KeyboardInterrupt:
-            console.print(f"\n[yellow]⚠️  Migração interrompida pelo usuário[/yellow]")
-            return False
-            
-        except Exception as e:
-            error_content = f"""[red]❌ Erro inesperado durante conversão[/red]
-
-[yellow]🔍 Detalhes do Erro:[/yellow]
-[white]   📝 Tipo: {type(e).__name__}[/white]
-[white]   📄 Mensagem: {str(e)}[/white]
-
-[cyan]💡 Ações Recomendadas:[/cyan]
-[white]   • Verifique conectividade SSH[/white]
-[white]   • Confirme permissões no servidor origem[/white]
-[white]   • Tente executar novamente[/white]
-[white]   • Consulte logs para mais detalhes[/white]"""
-            
-            console.print()
-            console.print(Panel(
-                error_content,
-                title="[bold red]❌ ERRO INESPERADO[/bold red]",
-                border_style="red",
-                padding=(1, 2)
-            ))
-            return False
+def handle_container_creation_error(data, result):
+    """Trata erros na criação do container"""
+    error_msg = get_text("CONTAINER_CREATE_FAILED").format(result.stderr)
+    console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
+    
+    # Análise específica do erro
+    if "no such logical volume" in result.stderr:
+        console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
+        console.print(f"   • O storage {data['storage']} não tem espaço suficiente")
+        console.print(f"   • Tamanho solicitado: {data['rootsize']}")
+        console.print(f"   • Verifique o espaço disponível com: pvesm status")
+        
+        # Verifica espaço atual
+        has_space, space_msg = check_storage_space(data['storage'], data['rootsize'])
+        if not has_space:
+            console.print(f"[red]   • {space_msg}[/red]")
+        
+        console.print(f"[yellow]💡 Soluções:[/yellow]")
+        console.print(f"   • Escolha um storage com mais espaço")
+        console.print(f"   • Reduza o tamanho do disco (atualmente {data['rootsize']})")
+        console.print(f"   • Libere espaço no storage atual")
+        console.print(f"   • Use um storage diferente (ex: local-lvm, local)")
+    
+    elif "already exists" in result.stderr:
+        console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
+        console.print(f"   • Container ID {data['id']} já existe")
+        console.print(f"[yellow]💡 Soluções:[/yellow]")
+        console.print(f"   • Escolha outro ID de container")
+        console.print(f"   • Remova o container existente: pct destroy {data['id']}")
+    
+    elif "permission denied" in result.stderr:
+        console.print(f"[yellow]🔍 Análise do erro:[/yellow]")
+        console.print(f"   • Problema de permissões no Proxmox")
+        console.print(f"[yellow]💡 Soluções:[/yellow]")
+        console.print(f"   • Execute como root: sudo lincon")
+        console.print(f"   • Verifique permissões do usuário no Proxmox")
+    
+    display_recommendation("CONTAINER_CREATE_REC")
 
 def confirm_migration(data):
     """Confirma os detalhes da migração com o usuário"""
