@@ -402,7 +402,16 @@ def validate_ct_id(ct_id):
 def validate_size_format(size):
     """Valida formato de tamanho (ex: 20G, 500M)"""
     pattern = r'^\d+[GM]$'
-    return re.match(pattern, size.upper()) is not None
+    if not re.match(pattern, size.upper()):
+        return False
+    
+    # Converte para o formato que o Proxmox espera
+    size = size.upper()
+    if size.endswith('G'):
+        return size + 'B'  # 5G -> 5GB
+    elif size.endswith('M'):
+        return size + 'B'  # 500M -> 500MB
+    return size
 
 def check_dependencies():
     """Verifica se as dependências necessárias estão instaladas"""
@@ -943,8 +952,9 @@ def user_input():
         
         rootsize = Prompt.ask(get_text("DISK_SIZE_PROMPT"), default="20G")
         
-        if validate_size_format(rootsize):
-            data["rootsize"] = rootsize.upper()
+        validated_size = validate_size_format(rootsize)
+        if validated_size:
+            data["rootsize"] = validated_size
             break
         else:
             display_warning("INVALID_SIZE_FORMAT")
@@ -1524,13 +1534,6 @@ def create_lxc_container(data, temp_file_name):
         net_param = f"name=eth0,bridge={data['bridge']},ip={data['ip']}/24,gw={data['gateway']}"
     
     # Usando o mesmo formato do script shell que funciona
-    # Converte tamanho para formato correto (ex: 5G -> 5GB)
-    rootfs_size = data["rootsize"].upper()
-    if rootfs_size.endswith('G'):
-        rootfs_size = rootfs_size[:-1] + 'GB'
-    elif rootfs_size.endswith('M'):
-        rootfs_size = rootfs_size[:-1] + 'MB'
-    
     create_command = [
         "pct", "create", data["id"], temp_file_name,
         "-description", "LXC",
@@ -1539,7 +1542,8 @@ def create_lxc_container(data, temp_file_name):
         "-memory", data["memory"],
         "-nameserver", "8.8.8.8",
         "-net0", net_param,
-        "-rootfs", f"{data['storage']}:{rootfs_size}",
+        "-rootfs", data["rootsize"],
+        "-storage", data["storage"],
         "-password", data["passwordCT"]
     ]
     
