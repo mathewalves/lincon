@@ -1532,36 +1532,34 @@ def create_lxc_container(data, temp_file_name):
     else:
         net_param = f"name=eth0,bridge={data['bridge']},ip={data['ip']}/24,gw={data['gateway']}"
     
+    # Como estamos restaurando um backup completo, usamos pct restore em vez de pct create
     create_command = [
-        "pct", "create", data["id"], temp_file_name,
-        "--description", f"🐳 LINCON Migration: {data['name']} (from {data['target']}) - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "pct", "restore", data["id"], temp_file_name,
         "--hostname", data["name"],
         "--features", "nesting=1",
         "--unprivileged", "0", 
         "--memory", data["memory"],
         "--nameserver", "8.8.8.8,1.1.1.1",
         "--net0", net_param,
-        "--storage", data["storage"],
-        "--rootfs", f"size={data['rootsize']}",
+        "--rootfs", f"{data['storage']}:{data['rootsize']}",
         "--password", data["passwordCT"],
         "--onboot", "1",
-        "--cmode", "shell",
         "--arch", "amd64"
     ]
     
-    # Interface moderna de criação do container
+    # Interface moderna de restauração do container
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
         transient=True
     ) as progress:
-        task = progress.add_task(description="⚙️  Criando container LXC...", total=None)
+        task = progress.add_task(description="📦 Restaurando container LXC...", total=None)
         result = subprocess.run(create_command, capture_output=True, text=True)
     
     if result.returncode == 0:
         console.print()
-        console.print("[bold green]✅ Container LXC criado com sucesso![/bold green]")
+        console.print("[bold green]✅ Container LXC restaurado com sucesso![/bold green]")
         
         # Inicia o container
         return start_lxc_container(data)
@@ -1641,8 +1639,8 @@ def show_container_created_but_start_failed(data, start_result):
 
 
 def handle_container_creation_error(data, result):
-    """Trata erros na criação do container"""
-    error_msg = get_text("CONTAINER_CREATE_FAILED").format(result.stderr)
+    """Trata erros na restauração do container"""
+    error_msg = get_text("CONTAINER_RESTORE_FAILED").format(result.stderr)
     console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
     
     # Análise específica do erro
@@ -1677,7 +1675,7 @@ def handle_container_creation_error(data, result):
         console.print(f"   • Execute como root: sudo lincon")
         console.print(f"   • Verifique permissões do usuário no Proxmox")
     
-    display_recommendation("CONTAINER_CREATE_REC")
+    display_recommendation("CONTAINER_RESTORE_REC")
 
 def confirm_migration(data):
     """Confirma os detalhes da migração com o usuário"""

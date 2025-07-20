@@ -515,7 +515,11 @@ translations = {
         # Hostname validation
         "INVALID_HOSTNAME": "Hostname inválido!",
         "HOSTNAME_VALIDATION_ERROR": "Hostname contém caracteres inválidos ou formato inválido",
-        "HOSTNAME_SUGGESTIONS": "Use apenas letras, números, hífens e pontos. Evite espaços e caracteres especiais."
+        "HOSTNAME_SUGGESTIONS": "Use apenas letras, números, hífens e pontos. Evite espaços e caracteres especiais.",
+        
+        # Container restore
+        "CONTAINER_RESTORE_FAILED": "Falha ao restaurar container: {}",
+        "CONTAINER_RESTORE_REC": "Verifique:\n• Espaço disponível no storage\n• ID do container não existe\n• Permissões do Proxmox\n• Arquivo de backup válido"
     },
     "en": {
         # menu
@@ -1033,6 +1037,10 @@ translations = {
         # Hostname validation
         "INVALID_HOSTNAME": "Invalid hostname!",
         "HOSTNAME_VALIDATION_ERROR": "Hostname contains invalid characters or invalid format",
-        "HOSTNAME_SUGGESTIONS": "Use only letters, numbers, hyphens and dots. Avoid spaces and special characters."
+        "HOSTNAME_SUGGESTIONS": "Use only letters, numbers, hyphens and dots. Avoid spaces and special characters.",
+        
+        # Container restore
+        "CONTAINER_RESTORE_FAILED": "Failed to restore container: {}",
+        "CONTAINER_RESTORE_REC": "Check:\n• Available space in storage\n• Container ID doesn't exist\n• Proxmox permissions\n• Valid backup file"
     }
 }
