@@ -1524,6 +1524,13 @@ def create_lxc_container(data, temp_file_name):
         net_param = f"name=eth0,bridge={data['bridge']},ip={data['ip']}/24,gw={data['gateway']}"
     
     # Usando o mesmo formato do script shell que funciona
+    # Converte tamanho para formato correto (ex: 5G -> 5GB)
+    rootfs_size = data["rootsize"].upper()
+    if rootfs_size.endswith('G'):
+        rootfs_size = rootfs_size[:-1] + 'GB'
+    elif rootfs_size.endswith('M'):
+        rootfs_size = rootfs_size[:-1] + 'MB'
+    
     create_command = [
         "pct", "create", data["id"], temp_file_name,
         "-description", "LXC",
@@ -1532,8 +1539,7 @@ def create_lxc_container(data, temp_file_name):
         "-memory", data["memory"],
         "-nameserver", "8.8.8.8",
         "-net0", net_param,
-        "--rootfs", data["rootsize"],
-        "-storage", data["storage"],
+        "-rootfs", f"{data['storage']}:{rootfs_size}",
         "-password", data["passwordCT"]
     ]
     
