@@ -1152,41 +1152,25 @@ def check_storage_space(storage_name, required_size):
 
 def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
-    excluded_paths = [
-        "/proc",
-        "/sys", 
-        "/dev",
-        "/tmp",
-        "/run",
-        "/mnt",
-        "/media",
-        "/lost+found",
-        "/var/cache/apt/archives",
-        "/swapfile",
-        "/swap.img"
-    ]
+    # Cria função collectFS em bash que será executada remotamente
+    collect_fs_function = """
+    collectFS() {
+        tar -czvf - -C / \\
+        --exclude="sys" \\
+        --exclude="dev" \\
+        --exclude="run" \\
+        --exclude="proc" \\
+        --exclude="*.log" \\
+        --exclude="*.log*" \\
+        --exclude="*.gz" \\
+        --exclude="*.sql" \\
+        --exclude="swap.img" \\
+        .
+    }
+    """
     
-    # Constrói comando tar como string para melhor controle
-    tar_parts = [
-        "tar",
-        "czpf", "-",
-        "--warning=no-file-changed",
-        "--warning=no-file-removed", 
-        "--one-file-system",
-        "--ignore-failed-read",
-        "--numeric-owner",
-        "--exclude-caches"
-    ]
-    
-    # Adiciona exclusões
-    for path in excluded_paths:
-        tar_parts.extend(["--exclude", path])
-    
-    # Adiciona diretório raiz
-    tar_parts.append("/")
-    
-    # Monta comando completo com redirecionamento de stderr
-    remote_cmd = " ".join(tar_parts) + " 2>/dev/null"
+    # Monta comando que define a função e a executa
+    remote_cmd = f"{collect_fs_function}; collectFS"
     ssh_command.append(remote_cmd)
     
     # Log comando para diagnóstico se necessário
@@ -1532,19 +1516,18 @@ def create_lxc_container(data, temp_file_name):
     else:
         net_param = f"name=eth0,bridge={data['bridge']},ip={data['ip']}/24,gw={data['gateway']}"
     
-    # Como estamos restaurando um backup completo, usamos pct restore em vez de pct create
+    # Usando o mesmo formato do script shell que funciona
     create_command = [
-        "pct", "restore", data["id"], temp_file_name,
-        "--hostname", data["name"],
+        "pct", "create", data["id"], temp_file_name,
+        "-description", "LXC",
+        "-hostname", data["name"],
         "--features", "nesting=1",
-        "--unprivileged", "0", 
-        "--memory", data["memory"],
-        "--nameserver", "8.8.8.8,1.1.1.1",
-        "--net0", net_param,
-        "--rootfs", f"{data['storage']}:{data['rootsize']}",
-        "--password", data["passwordCT"],
-        "--onboot", "1",
-        "--arch", "amd64"
+        "-memory", data["memory"],
+        "-nameserver", "8.8.8.8",
+        "-net0", net_param,
+        "--rootfs", data["rootsize"],
+        "-storage", data["storage"],
+        "-password", data["passwordCT"]
     ]
     
     # Interface moderna de restauração do container
