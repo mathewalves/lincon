@@ -1154,7 +1154,9 @@ def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
     # Cria função collectFS em bash que será executada remotamente
     remote_cmd = """collectFS() {
-        tar -czvf - -C / \
+        tar --warning=no-file-changed \
+        --warning=no-file-removed \
+        --ignore-failed-read \
         --exclude="sys" \
         --exclude="dev" \
         --exclude="run" \
@@ -1164,7 +1166,9 @@ def collect_fs(ssh_command):
         --exclude="*.gz" \
         --exclude="*.sql" \
         --exclude="swap.img" \
-        .
+        --exclude="tmp" \
+        --exclude="var/tmp" \
+        -C / -cf - . | gzip --fast
     }; collectFS"""
     ssh_command.append(remote_cmd)
     
@@ -1294,9 +1298,14 @@ def convert(data):
                     last_update = time.time()
                     total_bytes = 0
                     update_interval = 0.5  # Atualização mais frequente
+                    buffer_size = 8 * 1024 * 1024  # 8MB buffer
                     
                     if process.stdout:  # Verifica se stdout não é None
-                        for chunk in process.stdout:
+                        while True:
+                            chunk = process.stdout.read(buffer_size)
+                            if not chunk:
+                                break
+                                
                             f.write(chunk)
                             chunk_count += 1
                             total_bytes += len(chunk)
@@ -1310,6 +1319,9 @@ def convert(data):
                                     description=f"🚀 Transferindo sistema ({total_bytes // (1024*1024):.0f} MB)..."
                                 )
                                 last_update = current_time
+                                
+                            # Força flush do buffer para evitar acúmulo de memória
+                            f.flush()
             
             # Aguarda o processo e captura erros
             return_code = process.wait()
