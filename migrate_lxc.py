@@ -1153,24 +1153,19 @@ def check_storage_space(storage_name, required_size):
 def collect_fs(ssh_command):
     """Coleta o sistema de arquivos via SSH"""
     # Cria função collectFS em bash que será executada remotamente
-    collect_fs_function = """
-    collectFS() {
-        tar -czvf - -C / \\
-        --exclude="sys" \\
-        --exclude="dev" \\
-        --exclude="run" \\
-        --exclude="proc" \\
-        --exclude="*.log" \\
-        --exclude="*.log*" \\
-        --exclude="*.gz" \\
-        --exclude="*.sql" \\
-        --exclude="swap.img" \\
+    remote_cmd = """collectFS() {
+        tar -czvf - -C / \
+        --exclude="sys" \
+        --exclude="dev" \
+        --exclude="run" \
+        --exclude="proc" \
+        --exclude="*.log" \
+        --exclude="*.log*" \
+        --exclude="*.gz" \
+        --exclude="*.sql" \
+        --exclude="swap.img" \
         .
-    }
-    """
-    
-    # Monta comando que define a função e a executa
-    remote_cmd = f"{collect_fs_function}; collectFS"
+    }; collectFS"""
     ssh_command.append(remote_cmd)
     
     # Log comando para diagnóstico se necessário
