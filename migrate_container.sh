@@ -143,14 +143,15 @@ fi
 echo "Comando real a ser executado:"
 echo pct create "$id" "/tmp/$name.tar.gz" --rootfs "$rootfs_param" --storage "$storage" --hostname "$name" --memory "$memory" --net0 "$net_config" -password "$password"
 
-pct create "$id" "/tmp/$name.tar.gz" \
+if pct create "$id" "/tmp/$name.tar.gz" \
   -description "LXC" \
   -hostname "$name" \
   --features nesting=1 \
   -memory "$memory" -nameserver 8.8.8.8 \
   -net0 "$net_config" \
   --rootfs "$rootfs_param" \
-  -password "$password"; then
+  -password "$password"
+then
     
     echo "✅ Container created successfully!"
     echo "🚀 Starting container $id..."
