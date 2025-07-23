@@ -5,6 +5,7 @@ from rich.prompt import Prompt, Confirm
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.live import Live
 from rich.text import Text
+from rich.spinner import Spinner
 from lang.translations import translations
 import subprocess
 import os
@@ -14,6 +15,8 @@ import signal
 import time
 import threading
 import queue
+import select
+import fcntl
 
 console = Console()
 current_language = "pt-br"
@@ -254,7 +257,7 @@ def select_storage():
         if not storages:
             display_error("NO_STORAGE_FOUND")
             display_recommendation("STORAGE_CHECK_ACTIVE")
-            return None
+            return None, None
 
         table = Table(title=f"[bold cyan]{get_text('STORAGE_AVAILABLE')}[/bold cyan]", show_header=True)
         table.add_column("Opção", style="cyan", width=6)
@@ -679,8 +682,24 @@ def confirm_migration(data):
     
     return Confirm.ask(get_text("CONFIRM_MIGRATION"), default=False)
 
-def execute_migration_with_feedback(data):
-    """Executa a migração com feedback em tempo real"""
+def monitor_ssh_connection(target, port, password):
+    """Monitora a conexão SSH durante a migração"""
+    try:
+        cmd = [
+            "sshpass", "-p", password,
+            "ssh", "-p", str(port),
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=5",
+            f"root@{target}",
+            "echo 'ping'"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return result.returncode == 0
+    except:
+        return False
+
+def execute_migration_with_enhanced_feedback(data):
+    """Executa a migração com feedback muito melhorado e robusto"""
     console.print(f"\n[cyan]📦 {get_text('MIGRATION_STARTING')}[/cyan]")
     
     script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrate_container.sh")
@@ -705,49 +724,129 @@ def execute_migration_with_feedback(data):
         "-w", data["passwordSSH"]
     ]
     
+    console.print("\n" + "="*70)
+    console.print(f"[bold green]🚀 INICIANDO MIGRAÇÃO - ID {data['id']} ({data['name']})[/bold green]")
+    console.print("="*70)
+    
     try:
-        # Criar um processo que executa o script
+        # Cria processo com buffer line-based
         process = subprocess.Popen(
             shell_command, 
             stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Redireciona stderr para stdout
             universal_newlines=True,
-            bufsize=1
+            bufsize=1,  # Line buffered
+            preexec_fn=os.setsid  # Cria new session para controle
         )
         
-        # Layout para feedback em tempo real
-        console.print("\n" + "="*70)
-        console.print(f"[bold green]🚀 INICIANDO MIGRAÇÃO - ID {data['id']} ({data['name']})[/bold green]")
-        console.print("="*70)
+        # Configurações de timeout e monitoramento
+        start_time = time.time()
+        last_output_time = time.time()
+        no_output_timeout = 300  # 5 minutos sem output
+        max_migration_time = 3600  # 1 hora máximo
+        ssh_check_interval = 60  # Verifica SSH a cada 1 minuto
+        last_ssh_check = time.time()
         
-        output_lines = []
-        error_lines = []
+        # Controle de estado
+        collection_started = False
+        collection_completed = False
+        creation_started = False
         
-        # Lê a saída em tempo real
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output:
-                line = output.strip()
-                output_lines.append(line)
+        with Progress(
+            SpinnerColumn(spinner_style="cyan"),
+            TextColumn("[bold blue]{task.description}"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=False
+        ) as progress:
+            
+            task = progress.add_task("🔄 Iniciando migração...", total=None)
+            
+            while True:
+                # Verifica se processo terminou
+                if process.poll() is not None:
+                    break
                 
-                # Destaca linhas importantes
-                if any(symbol in line for symbol in ['🚀', '✅', '📡', '📦', '🎉', '💡']):
-                    console.print(f"[bold]{line}[/bold]")
-                elif '❌' in line:
-                    console.print(f"[red]{line}[/red]")
-                elif '⚠️' in line:
-                    console.print(f"[yellow]{line}[/yellow]")
-                else:
-                    console.print(f"[dim]{line}[/dim]")
+                current_time = time.time()
+                elapsed_time = current_time - start_time
+                
+                # Timeout geral
+                if elapsed_time > max_migration_time:
+                    console.print(f"\n[red]❌ Timeout: Migração excedeu {max_migration_time//60} minutos[/red]")
+                    process.terminate()
+                    return False
+                
+                # Timeout sem output
+                if current_time - last_output_time > no_output_timeout:
+                    console.print(f"\n[yellow]⚠️  Sem resposta há {no_output_timeout//60} minutos[/yellow]")
+                    
+                    # Verifica se SSH ainda funciona
+                    console.print(f"[cyan]🔍 Verificando conectividade SSH...[/cyan]")
+                    if monitor_ssh_connection(data["target"], data["port"], data["passwordSSH"]):
+                        console.print(f"[green]✅ SSH ainda ativo - continuando...[/green]")
+                        last_output_time = current_time  # Reset timeout
+                        progress.update(task, description="🔄 Processo ativo, aguardando resposta...")
+                    else:
+                        console.print(f"[red]❌ Conexão SSH perdida![/red]")
+                        process.terminate()
+                        return False
+                
+                # Verifica SSH periodicamente
+                if current_time - last_ssh_check > ssh_check_interval:
+                    if not monitor_ssh_connection(data["target"], data["port"], data["passwordSSH"]):
+                        console.print(f"\n[red]❌ Conexão SSH perdida durante migração![/red]")
+                        process.terminate()
+                        return False
+                    last_ssh_check = current_time
+                
+                # Lê output do processo
+                try:
+                    # Usa select para leitura não-bloqueante
+                    ready, _, _ = select.select([process.stdout], [], [], 1.0)
+                    
+                    if ready:
+                        line = process.stdout.readline()
+                        if line:
+                            line = line.strip()
+                            last_output_time = current_time
+                            
+                            # Atualiza descrição baseada no conteúdo
+                            if "collecting filesystem" in line.lower() or "collecting" in line.lower():
+                                if not collection_started:
+                                    progress.update(task, description="📡 Coletando sistema de arquivos...")
+                                    collection_started = True
+                                    console.print(f"[bold blue]📡 Coletando dados do servidor {data['target']}...[/bold blue]")
+                            elif "filesystem collected" in line.lower() or "collected successfully" in line.lower():
+                                if not collection_completed:
+                                    progress.update(task, description="✅ Coleta concluída, criando container...")
+                                    collection_completed = True
+                            elif "creating container" in line.lower() or "pct create" in line.lower():
+                                if not creation_started:
+                                    progress.update(task, description="📦 Criando container LXC...")
+                                    creation_started = True
+                            elif "starting container" in line.lower():
+                                progress.update(task, description="🚀 Iniciando container...")
+                            elif "migration completed" in line.lower():
+                                progress.update(task, description="🎉 Migração concluída!")
+                            
+                            # Destaca linhas importantes
+                            if any(symbol in line for symbol in ['🚀', '✅', '📡', '📦', '🎉', '💡']):
+                                console.print(f"[bold]{line}[/bold]")
+                            elif '❌' in line or 'error' in line.lower() or 'failed' in line.lower():
+                                console.print(f"[red]{line}[/red]")
+                            elif '⚠️' in line or 'warning' in line.lower():
+                                console.print(f"[yellow]{line}[/yellow]")
+                            else:
+                                # Log normal com timestamp para debug
+                                if line.strip():
+                                    console.print(f"[dim]{line}[/dim]")
+                    
+                except Exception as e:
+                    console.print(f"[red]Erro lendo output: {e}[/red]")
+                    break
         
-        # Captura erros se houver
-        stderr_output = process.stderr.read()
-        if stderr_output:
-            error_lines.extend(stderr_output.split('\n'))
-        
-        return_code = process.poll()
+        # Aguarda finalização
+        return_code = process.wait(timeout=30)
         
         console.print("="*70)
         
@@ -770,18 +869,43 @@ def execute_migration_with_feedback(data):
             return True
         else:
             console.print(f"[red]❌ Falha na migração (código: {return_code})[/red]")
-            if error_lines:
-                console.print(f"[red]Erros:[/red]")
-                for error in error_lines:
-                    if error.strip():
-                        console.print(f"[red]  {error}[/red]")
+            
+            # Tenta capturar erros restantes
+            try:
+                remaining_output = process.stdout.read() if process.stdout else ""
+                if remaining_output:
+                    console.print(f"[red]Output final:[/red]")
+                    for line in remaining_output.split('\n'):
+                        if line.strip():
+                            console.print(f"[red]  {line}[/red]")
+            except:
+                pass
+            
             return False
             
     except subprocess.TimeoutExpired:
-        console.print(f"\n[red]❌ {get_text('SSH_TIMEOUT')}[/red]")
+        console.print(f"\n[red]❌ Timeout na migração[/red]")
+        try:
+            process.terminate()
+            time.sleep(2)
+            if process.poll() is None:
+                process.kill()
+        except:
+            pass
+        return False
+    except KeyboardInterrupt:
+        console.print(f"\n[yellow]⚠️  Migração cancelada pelo usuário[/yellow]")
+        try:
+            process.terminate()
+        except:
+            pass
         return False
     except Exception as e:
         console.print(f"\n[red]❌ Erro inesperado: {e}[/red]")
+        try:
+            process.terminate()
+        except:
+            pass
         return False
 
 def migrate_lxc():
@@ -804,7 +928,7 @@ def migrate_lxc():
         console.print(f"\n[yellow]❌ {get_text('MIGRATION_CANCELLED_INPUT')}[/yellow]")
         return False
     
-    return execute_migration_with_feedback(data)
+    return execute_migration_with_enhanced_feedback(data)
 
 if __name__ == "__main__":
     migrate_lxc() 
