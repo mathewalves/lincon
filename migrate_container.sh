@@ -119,6 +119,11 @@ else
     net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
 fi
 
+echo "Comando a ser executado:"
+echo pct create $ID $TARBALL --rootfs $STORAGE:$ROOTFS --storage $STORAGE --hostname $HOSTNAME --memory $MEMORY --net0 name=eth0,bridge=$BRIDGE,ip=$IP,gw=$GATEWAY
+
+pct create $ID $TARBALL --rootfs $STORAGE:$ROOTFS --storage $STORAGE --hostname $HOSTNAME --memory $MEMORY --net0 name=eth0,bridge=$BRIDGE,ip=$IP,gw=$GATEWAY
+
 # Create a Proxmox container using the collected file system data and provided parameters
 if pct create "$id" "/tmp/$name.tar.gz" \
   -description "LXC" \
