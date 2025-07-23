@@ -2,7 +2,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
-from rich.progress import track
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from lang.translations import translations
 from utils.migration_state import MigrationState
 from utils.system_info import check_docker
@@ -16,56 +16,167 @@ import signal
 import logging
 
 logger = logging.getLogger('lincon')
-
 console = Console()
 current_language = "pt-br"
 
-def display_message(title, message):
-    """Exibe uma mensagem em um painel"""
-    title_text = translations[current_language].get(title, title)
-    message_text = translations[current_language].get(message, message)
-    console.print(Panel(message_text, title=title_text))
+def get_text(key):
+    """Obtém texto traduzido"""
+    return translations[current_language].get(key, key)
+
+def display_error(message_key):
+    """Exibe um erro usando tradução"""
+    message = get_text(message_key)
+    console.print(Panel(f"❌ {message}", title="❌ ERRO", style="red"))
+
+def display_success(message_key):
+    """Exibe sucesso usando tradução"""
+    message = get_text(message_key)
+    console.print(Panel(f"✅ {message}", title="✅ SUCESSO", style="green"))
+
+def display_warning(message_key):
+    """Exibe aviso usando tradução"""
+    message = get_text(message_key)
+    console.print(Panel(f"⚠️  {message}", title="⚠️  ATENÇÃO", style="yellow"))
+
+def display_recommendation(message_key):
+    """Exibe recomendação usando tradução"""
+    message = get_text(message_key)
+    console.print(Panel(f"💡 {message}", title="💡 RECOMENDAÇÃO", style="cyan"))
 
 def check_dependencies():
     """Verifica se as dependências necessárias estão instaladas"""
+    console.print(f"[cyan]🔍 {get_text('CHECKING_DEPS')}[/cyan]")
+    
     # Verifica Docker
     if not check_docker():
-        display_message("TITLE_ERROR", "MSG_NO_DOCKER")
-        console.print("\n[yellow]Para instalar o Docker, execute:[/yellow]")
-        console.print("[cyan]curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh[/cyan]")
+        display_error("MSG_NO_DOCKER")
+        console.print(f"\n[yellow]Para instalar o Docker, execute:[/yellow]")
+        console.print(f"[cyan]curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh[/cyan]")
         return False
 
     # Verifica/instala sshpass
     if not shutil.which("sshpass"):
-        display_message("TITLE_INFO", "MSG_INSTALLING_SSHPASS")
+        console.print(f"[cyan]{get_text('INSTALLING_SSHPASS')}[/cyan]")
         try:
-            subprocess.run(["sudo", "apt-get", "update"], check=True)
-            subprocess.run(["sudo", "apt-get", "install", "-y", "sshpass"], check=True)
-            display_message("TITLE_SUCCESS", "MSG_SSHPASS_INSTALLED")
+            subprocess.run(["sudo", "apt-get", "update"], check=True, capture_output=True)
+            subprocess.run(["sudo", "apt-get", "install", "-y", "sshpass"], check=True, capture_output=True)
+            display_success("SSHPASS_INSTALLED")
         except subprocess.CalledProcessError:
-            display_message("TITLE_ERROR", "MSG_SSH_INSTALL_FAILED")
+            display_error("SSH_INSTALL_FAILED")
             return False
+    
+    display_success("ALL_DEPS_AVAILABLE")
     return True
 
+def test_ssh_connection(target, port, password):
+    """Testa conexão SSH com feedback visual"""
+    console.print(f"[cyan]🔍 {get_text('TESTING_SSH')}[/cyan]")
+    
+    try:
+        cmd = [
+            "sshpass", "-p", password,
+            "ssh", "-p", str(port),
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            f"root@{target}",
+            "echo 'SSH_OK'"
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        
+        if result.returncode == 0:
+            display_success("SSH_CONNECTION_OK")
+            return True
+        else:
+            error_msg = get_text("SSH_CONNECTION_FAILED").format(result.stderr.strip())
+            console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
+            return False
+            
+    except subprocess.TimeoutExpired:
+        display_error("SSH_TIMEOUT")
+        return False
+    except Exception as e:
+        error_msg = get_text("SSH_TEST_ERROR").format(e)
+        console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
+        return False
+
 def user_input():
-    """Coleta todos os dados necessários do usuário"""
+    """Coleta todos os dados necessários do usuário com interface moderna"""
+    console.clear()
+    console.print(f"[bold cyan]🐳 LINCON - Migração Linux → Docker[/bold cyan]\n")
+    
     data = {}
     
-    data["container_name"] = Prompt.ask("Nome do Container Docker")
-    data["target"] = Prompt.ask("Host de Origem")
-    data["port"] = Prompt.ask("Porta SSH", default="22")
-    data["passwordSSH"] = Prompt.ask("Senha SSH", password=True)
+    # Nome do Container
+    console.print(f"[cyan]📦 Nome do Container Docker[/cyan]")
+    console.print(f"[dim]💡 Use nomes descritivos sem espaços (ex: web-app, api-server)[/dim]")
+    
+    while True:
+        container_name = Prompt.ask("Nome do Container Docker")
+        if container_name and len(container_name) >= 3:
+            data["container_name"] = container_name
+            break
+        else:
+            console.print(f"[red]❌ Nome deve ter pelo menos 3 caracteres![/red]")
+    
+    # Host de origem
+    console.print(f"\n[cyan]🖥️  Servidor de Origem[/cyan]")
+    console.print(f"[dim]💡 Use IP ou hostname do servidor Linux a ser migrado[/dim]")
+    
+    while True:
+        target = Prompt.ask("Host/IP de origem")
+        if target and len(target) >= 3:
+            data["target"] = target
+            break
+        else:
+            console.print(f"[red]❌ Host inválido![/red]")
+    
+    # Porta SSH
+    console.print(f"\n[cyan]🔌 Porta SSH (Host: {data['target']})[/cyan]")
+    
+    while True:
+        port = Prompt.ask("Porta SSH", default="22")
+        try:
+            port_num = int(port)
+            if 1 <= port_num <= 65535:
+                data["port"] = port
+                break
+            else:
+                console.print(f"[red]❌ Porta deve estar entre 1-65535![/red]")
+        except ValueError:
+            console.print(f"[red]❌ Digite apenas números![/red]")
+    
+    # Senha SSH
+    console.print(f"\n[cyan]🔐 Credenciais SSH[/cyan]")
+    console.print(f"[yellow]⚠️  A senha será usada para conectar como root no servidor de origem[/yellow]")
+    
+    while True:
+        password = Prompt.ask("Senha SSH do root", password=True)
+        if password:
+            if test_ssh_connection(data["target"], data["port"], password):
+                data["passwordSSH"] = password
+                break
+            else:
+                if not Confirm.ask("Tentar outra senha?"):
+                    return None
+        else:
+            console.print(f"[red]❌ Senha não pode estar vazia![/red]")
     
     # Configuração de rede
-    table = Table(show_header=False)
-    table.add_row("[1] Bridge padrão (docker0)")
-    table.add_row("[2] Host network")
-    table.add_row("[3] Personalizada")
+    console.print(f"\n[cyan]🌐 Configuração de Rede[/cyan]")
+    
+    table = Table(show_header=True, box=None)
+    table.add_column("Opção", style="cyan", width=6)
+    table.add_column("Tipo", style="green", width=15)
+    table.add_column("Descrição", style="dim")
+    
+    table.add_row("[1]", "Bridge padrão", "docker0 (padrão)")
+    table.add_row("[2]", "Host network", "Usa rede do host")
+    table.add_row("[3]", "Personalizada", "Rede customizada")
 
-    console.print(Panel("Selecione o tipo de rede:", title="Configuração de Rede"))
     console.print(table)
-
-    network_choice = Prompt.ask("", choices=["1", "2", "3"])
+    
+    network_choice = Prompt.ask("Escolha o tipo de rede", choices=["1", "2", "3"], default="1")
     
     if network_choice == "1":
         data["network"] = "bridge"
@@ -76,12 +187,16 @@ def user_input():
     
     # Configuração de portas
     if data["network"] != "host":
-        data["ports"] = Prompt.ask("Mapeamento de portas (ex: 80:80,443:443)", default="")
+        console.print(f"\n[cyan]🔗 Mapeamento de Portas[/cyan]")
+        console.print(f"[dim]💡 Formato: 80:80,443:443 (porta_host:porta_container)[/dim]")
+        data["ports"] = Prompt.ask("Mapeamento de portas (opcional)", default="")
     else:
         data["ports"] = ""
     
     # Configuração de volumes
-    data["volumes"] = Prompt.ask("Volumes extras (ex: /host/path:/container/path)", default="")
+    console.print(f"\n[cyan]💾 Volumes Extras[/cyan]")
+    console.print(f"[dim]💡 Formato: /host/path:/container/path[/dim]")
+    data["volumes"] = Prompt.ask("Volumes extras (opcional)", default="")
     
     return data
 
@@ -91,7 +206,7 @@ def validate_parameters(data):
                       
     for field in required_fields:
         if not data.get(field):
-            display_message("TITLE_ERROR", "MSG_MISSING_PARAMS")
+            display_error("MSG_MISSING_PARAMS")
             return False
             
     return True
@@ -138,12 +253,14 @@ CMD ["/usr/sbin/sshd", "-D"]
 """
     return dockerfile_content
 
-def convert(data):
-    """Converte e cria o container Docker"""
+def convert_with_feedback(data):
+    """Converte e cria o container Docker com feedback em tempo real"""
+    console.print(f"\n[cyan]📦 {get_text('MSG_CREATING_DOCKER_IMAGE')}[/cyan]")
+    
     with tempfile.TemporaryDirectory(prefix=f"{data['container_name']}_migration_") as temp_dir:
         temp_path = Path(temp_dir)
         
-        display_message("TITLE_INFO", "MSG_COLLECTING_FS")
+        console.print(f"[cyan]📡 Coletando sistema de arquivos...[/cyan]")
         
         ssh_command = [
             "sshpass", "-p", data["passwordSSH"],
@@ -159,18 +276,30 @@ def convert(data):
             filesystem_tar = temp_path / "filesystem.tar.gz"
             
             with open(filesystem_tar, 'wb') as f:
-                for chunk in process.stdout:
-                    f.write(chunk)
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    console=console
+                ) as progress:
+                    task = progress.add_task("🔄 Coletando dados...", total=None)
+                    
+                    for chunk in process.stdout:
+                        f.write(chunk)
+                        progress.update(task, advance=1)
             
             if process.wait() != 0:
-                display_message("TITLE_ERROR", "MSG_SSH_CONNECTION_FAILED")
+                display_error("SSH_CONNECTION_FAILED")
                 return False
                 
             if filesystem_tar.stat().st_size == 0:
-                display_message("TITLE_ERROR", "MSG_FS_COLLECTION_EMPTY")
+                console.print(f"[red]❌ Coleta do sistema de arquivos falhou[/red]")
                 return False
             
-            display_message("TITLE_INFO", "MSG_CREATING_DOCKER_IMAGE")
+            size_mb = filesystem_tar.stat().st_size / (1024 * 1024)
+            console.print(f"[green]✅ Sistema coletado: {size_mb:.1f} MB[/green]")
+            
+            console.print(f"[cyan]🐳 Construindo imagem Docker...[/cyan]")
             
             # Cria Dockerfile
             dockerfile_path = temp_path / "Dockerfile"
@@ -183,14 +312,23 @@ def convert(data):
                 str(temp_path)
             ]
             
-            if subprocess.run(build_command).returncode != 0:
-                display_message("TITLE_ERROR", "MSG_DOCKER_BUILD_FAILED")
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("🔨 Construindo imagem...", total=None)
+                result = subprocess.run(build_command, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                console.print(f"[red]❌ Falha na construção da imagem:[/red]")
+                console.print(f"[red]{result.stderr}[/red]")
                 return False
             
-            display_message("TITLE_SUCCESS", "MSG_DOCKER_IMAGE_CREATED")
+            display_success("MSG_DOCKER_IMAGE_CREATED")
             
             # Executa container
-            display_message("TITLE_INFO", "MSG_STARTING_DOCKER_CONTAINER")
+            console.print(f"[cyan]🚀 Iniciando container Docker...[/cyan]")
             
             run_command = ["docker", "run", "-d", "--name", data['container_name']]
             
@@ -214,53 +352,81 @@ def convert(data):
             
             run_command.append(f"lincon-migrated:{data['container_name']}")
             
-            if subprocess.run(run_command).returncode == 0:
-                display_message("TITLE_SUCCESS", "MSG_DOCKER_CONTAINER_STARTED")
+            result = subprocess.run(run_command, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                display_success("MSG_DOCKER_CONTAINER_STARTED")
                 
                 # Mostra informações do container
-                console.print(f"\n[green]Container criado com sucesso![/green]")
-                console.print(f"[cyan]Nome:[/cyan] {data['container_name']}")
-                console.print(f"[cyan]Imagem:[/cyan] lincon-migrated:{data['container_name']}")
-                console.print(f"[cyan]Rede:[/cyan] {data['network']}")
+                console.print(f"\n" + "="*70)
+                console.print(f"[bold green]🎉 MIGRAÇÃO DOCKER CONCLUÍDA![/bold green]")
+                console.print("="*70)
+                
+                console.print(f"[cyan]📦 Nome:[/cyan] {data['container_name']}")
+                console.print(f"[cyan]🐳 Imagem:[/cyan] lincon-migrated:{data['container_name']}")
+                console.print(f"[cyan]🌐 Rede:[/cyan] {data['network']}")
                 
                 if data["network"] != "host" and data.get("ports"):
-                    console.print(f"[cyan]Portas:[/cyan] {data['ports']}")
+                    console.print(f"[cyan]🔗 Portas:[/cyan] {data['ports']}")
                 
-                console.print("\n[yellow]Para acessar o container:[/yellow]")
-                console.print(f"[white]docker exec -it {data['container_name']} /bin/bash[/white]")
+                if data.get("volumes"):
+                    console.print(f"[cyan]💾 Volumes:[/cyan] {data['volumes']}")
+                
+                console.print(f"\n[yellow]💡 Comandos úteis:[/yellow]")
+                console.print(f"[white]   docker exec -it {data['container_name']} /bin/bash[/white]  [dim]# Entrar no container[/dim]")
+                console.print(f"[white]   docker stop {data['container_name']}[/white]                [dim]# Parar container[/dim]")
+                console.print(f"[white]   docker start {data['container_name']}[/white]               [dim]# Iniciar container[/dim]")
+                console.print(f"[white]   docker logs {data['container_name']}[/white]                [dim]# Ver logs[/dim]")
                 
                 return True
             else:
-                display_message("TITLE_ERROR", "MSG_DOCKER_CONTAINER_FAILED")
+                console.print(f"[red]❌ Falha ao iniciar container:[/red]")
+                console.print(f"[red]{result.stderr}[/red]")
                 return False
                 
         except Exception as e:
             logger.error(f"Erro durante conversão: {e}")
-            display_message("TITLE_ERROR", str(e))
+            console.print(f"[red]❌ Erro inesperado: {e}[/red]")
             return False
 
 def confirm_migration(data):
     """Confirma os detalhes da migração com o usuário"""
-    details = "Detalhes da Migração Docker:\n"
-    details += f"  Nome do Container: {data['container_name']}\n"
-    details += f"  Host de Origem: {data['target']}:{data['port']}\n"
-    details += f"  Rede: {data['network']}\n"
+    console.print(f"\n[bold cyan]📋 Confirmação da Migração Docker[/bold cyan]")
+    
+    table = Table(title="[bold green]Detalhes da Migração Docker[/bold green]", show_header=True)
+    table.add_column("Item", style="cyan", width=20)
+    table.add_column("Valor", style="white")
+    
+    table.add_row("🐳 Nome do Container", f"[bright_green]{data['container_name']}[/bright_green]")
+    table.add_row("🖥️  Servidor Origem", f"[bright_blue]{data['target']}:{data['port']}[/bright_blue]")
+    table.add_row("🌐 Rede", f"[bright_yellow]{data['network']}[/bright_yellow]")
     
     if data.get("ports"):
-        details += f"  Portas: {data['ports']}\n"
+        table.add_row("🔗 Portas", f"[bright_magenta]{data['ports']}[/bright_magenta]")
     
     if data.get("volumes"):
-        details += f"  Volumes: {data['volumes']}\n"
+        table.add_row("💾 Volumes", f"[bright_cyan]{data['volumes']}[/bright_cyan]")
     
-    console.print(Panel(details, title="Confirmar Migração Docker"))
-    return Confirm.ask("Confirmar migração?")
+    console.print(table)
+    console.print()
+    
+    console.print(f"[yellow]⚠️  Esta operação irá:[/yellow]")
+    console.print(f"• Conectar ao servidor origem via SSH")
+    console.print(f"• Coletar todo o sistema de arquivos")
+    console.print(f"• Criar uma imagem Docker")
+    console.print(f"• Iniciar o container automaticamente")
+    
+    console.print(f"\n[cyan]💡 Certifique-se de que:[/cyan]")
+    console.print(f"• O Docker está instalado e rodando")
+    console.print(f"• O servidor origem está acessível")
+    console.print(f"• Há espaço suficiente em disco")
+    
+    return Confirm.ask(f"\n✅ Confirmar migração Docker?", default=False)
 
 def migrate_docker():
-    """Função principal de migração para Docker"""
+    """Função principal de migração para Docker com interface otimizada"""
     def handle_interrupt(signum, frame):
-        if 'state_manager' in locals():
-            state_manager.save_state(data, "interrupted")
-        display_message("TITLE_INFO", "MSG_MIGRATION_CANCELLED_INT")
+        console.print(f"\n[yellow]⚠️  Migração Docker cancelada pelo usuário[/yellow]")
         exit(1)
     
     signal.signal(signal.SIGINT, handle_interrupt)
@@ -272,7 +438,7 @@ def migrate_docker():
     
     data = user_input()
     if not data:
-        display_message("TITLE_ERROR", "MSG_USER_INPUT_CANCELLED")
+        console.print(f"\n[yellow]❌ Migração cancelada pelo usuário[/yellow]")
         return False
     
     state_manager.save_state(data, "input_collected")
@@ -283,12 +449,12 @@ def migrate_docker():
     state_manager.save_state(data, "validated")
     
     if not confirm_migration(data):
-        display_message("TITLE_INFO", "MSG_MIGRATION_CANCELLED_BY_USER")
+        console.print(f"\n[yellow]❌ Migração cancelada pelo usuário[/yellow]")
         state_manager.save_state(data, "cancelled")
         return False
     
     state_manager.save_state(data, "converting")
-    if convert(data):
+    if convert_with_feedback(data):
         state_manager.save_state(data, "completed")
         state_manager.clear_state()
         return True
