@@ -753,7 +753,7 @@ def execute_migration_with_enhanced_feedback(data):
         creation_started = False
         
         with Progress(
-            SpinnerColumn(spinner_style="cyan"),
+            SpinnerColumn(style="cyan"),
             TextColumn("[bold blue]{task.description}"),
             TimeElapsedColumn(),
             console=console,
