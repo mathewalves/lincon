@@ -94,6 +94,17 @@ fi
 echo "✅ Filesystem collected successfully"
 echo "📦 Creating container $id ($name)..."
 
+# Detecta tipo do storage
+storage_type=$(pvesm status | awk -v s=\"$storage\" '$1==s {print $2}')
+
+# Remove G/M se for dir
+if [ "$storage_type" = "dir" ]; then
+    rootsize_num=$(echo "$rootsize" | sed 's/[GM]//I')
+    rootfs_param="$storage:$rootsize_num"
+else
+    rootfs_param="$storage:$rootsize"
+fi
+
 # Set network configuration based on IP type
 if [ "$ip" = "dhcp" ]; then
     net_config="name=eth0,bridge=$bridge,ip=dhcp"
@@ -108,7 +119,7 @@ if pct create "$id" "/tmp/$name.tar.gz" \
   --features nesting=1 \
   -memory "$memory" -nameserver 8.8.8.8 \
   -net0 "$net_config" \
-  --rootfs "$storage:$rootsize" \
+  --rootfs "$rootfs_param" \
   -password "$password"; then
     
     echo "✅ Container created successfully!"
