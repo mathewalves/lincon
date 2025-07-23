@@ -119,13 +119,31 @@ else
     net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
 fi
 
-echo "Comando a ser executado:"
-echo pct create $ID $TARBALL --rootfs $STORAGE:$ROOTFS --storage $STORAGE --hostname $HOSTNAME --memory $MEMORY --net0 name=eth0,bridge=$BRIDGE,ip=$IP,gw=$GATEWAY
+echo "id: $id"
+echo "name: $name"
+echo "storage: $storage"
+echo "rootsize: $rootsize"
+echo "memory: $memory"
+echo "bridge: $bridge"
+echo "ip: $ip"
+echo "gateway: $gateway"
 
-pct create $ID $TARBALL --rootfs $STORAGE:$ROOTFS --storage $STORAGE --hostname $HOSTNAME --memory $MEMORY --net0 name=eth0,bridge=$BRIDGE,ip=$IP,gw=$GATEWAY
+if [ -z "$id" ] || [ -z "$rootfs_param" ] || [ -z "$storage" ] || [ -z "$name" ] || [ -z "$memory" ] || [ -z "$net_config" ] || [ -z "$password" ]; then
+  echo "❌ Erro: Um ou mais parâmetros obrigatórios estão vazios!"
+  echo "id: $id"
+  echo "rootfs_param: $rootfs_param"
+  echo "storage: $storage"
+  echo "name: $name"
+  echo "memory: $memory"
+  echo "net_config: $net_config"
+  echo "password: $password"
+  exit 1
+fi
 
-# Create a Proxmox container using the collected file system data and provided parameters
-if pct create "$id" "/tmp/$name.tar.gz" \
+echo "Comando real a ser executado:"
+echo pct create "$id" "/tmp/$name.tar.gz" --rootfs "$rootfs_param" --storage "$storage" --hostname "$name" --memory "$memory" --net0 "$net_config" -password "$password"
+
+pct create "$id" "/tmp/$name.tar.gz" \
   -description "LXC" \
   -hostname "$name" \
   --features nesting=1 \
