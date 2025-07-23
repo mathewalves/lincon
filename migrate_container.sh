@@ -108,7 +108,8 @@ if pct create "$id" "/tmp/$name.tar.gz" \
   --features nesting=1 \
   -memory "$memory" -nameserver 8.8.8.8 \
   -net0 "$net_config" \
-  --rootfs "$rootsize" -storage "$storage" -password "$password"; then
+  --rootfs "$storage:$rootsize" \
+  -password "$password"; then
     
     echo "✅ Container created successfully!"
     echo "🚀 Starting container $id..."
