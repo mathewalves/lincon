@@ -102,7 +102,7 @@ echo "✅ Filesystem collected successfully"
 echo "📦 Creating container $id ($name)..."
 
 # Detecta tipo do storage
-storage_type=$(pvesm status | awk -v s=\"$storage\" '$1==s {print $2}')
+storage_type=$(pvesm status | awk -v s="$storage" '$1==s {print $2}')
 
 # Remove G/M se for dir
 if [ "$storage_type" = "dir" ]; then
@@ -127,6 +127,7 @@ echo "memory: $memory"
 echo "bridge: $bridge"
 echo "ip: $ip"
 echo "gateway: $gateway"
+echo "rootfs_param: $rootfs_param"
 
 if [ -z "$id" ] || [ -z "$rootfs_param" ] || [ -z "$storage" ] || [ -z "$name" ] || [ -z "$memory" ] || [ -z "$net_config" ] || [ -z "$password" ]; then
   echo "❌ Erro: Um ou mais parâmetros obrigatórios estão vazios!"
