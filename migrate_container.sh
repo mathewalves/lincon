@@ -68,18 +68,25 @@ fi
 # Function to collect file system data, excluding unnecessary directories and files
 collectFS() {
     tar -czvf - -C / \
-	--exclude="sys" \
-	--exclude="dev" \
-	--exclude="run" \
-	--exclude="proc" \
-	--exclude="*.log" \
-	--exclude="*.log*" \
-	--exclude="*.gz" \
-	--exclude="*.sql" \
-	--exclude="swap.img" \
-	--exclude="tmp" \
-	--exclude="var/tmp" \
-	.
+    --exclude="sys" \
+    --exclude="dev" \
+    --exclude="run" \
+    --exclude="proc" \
+    --exclude="*.log" \
+    --exclude="*.log*" \
+    --exclude="*.gz" \
+    --exclude="*.sql" \
+    --exclude="swap.img" \
+    --exclude="tmp" \
+    --exclude="var/tmp" \
+    --exclude="var/lib/docker" \
+    --exclude="var/lib/containers" \
+    --exclude="var/cache" \
+    --exclude="var/log" \
+    --exclude="var/backups" \
+    --exclude="mnt" \
+    --exclude="media" \
+    .
 }
 
 echo "🚀 Starting container migration..."
