@@ -1,17 +1,116 @@
 #!/bin/bash
 
-# ... (toda a parte inicial de verificação e obtenção de parâmetros permanece a mesma) ...
-# Apenas a parte final, após "Creating container", será modificada.
+# Verifica se o comando 'pct' está disponível na máquina host (Proxmox)
+if ! command -v pct &> /dev/null
+then
+    echo "❌ Erro: Comando 'pct' não encontrado. Este script deve ser executado na máquina host Proxmox."
+    exit 1
+fi
 
-# Copie e cole todo o seu script até esta linha:
-echo "📦 Creating container $id ($name)..."
+# Função para exibir o uso do script
+usage()
+{
+    cat <<EOF
+Uso: $(basename "$0") [opções]
 
-# ---> INÍCIO DA SEÇÃO MODIFICADA <---
+Opções Obrigatórias:
+ -n, --name [nome]             Nome para o novo container LXC.
+ -t, --target [host]           IP ou hostname do servidor de origem a ser migrado.
+ -P, --port [porta]            Porta SSH do servidor de origem.
+ -i, --id [id]                 ID numérico para o novo container no Proxmox.
+ -s, --root-size [tamanho]     Tamanho do disco para o rootfs (ex: 4G, 10G).
+ -a, --ip [ip|dhcp]            Endereço IP para o container (ex: 192.168.1.100 ou dhcp).
+ -b, --bridge [bridge]         Interface de bridge do Proxmox (ex: vmbr0).
+ -g, --gateway [gateway]       Gateway da rede (necessário se o IP não for dhcp).
+ -m, --memory [memoria]        Memória RAM em MB para o container (ex: 1024).
+ -d, --disk-storage [storage]  Pool de armazenamento do Proxmox para o disco.
+ -p, --password [senha]        Senha 'root' para o novo container (mín. 5 caracteres).
+ -w, --ssh-password [senha]    Senha 'root' do servidor de origem para conexão SSH.
 
-# Detecta tipo do storage
+Ajuda:
+ -h, --help                    Exibe esta mensagem de ajuda.
+EOF
+    return 0
+}
+
+# Analisa as opções da linha de comando
+options=$(getopt -o n:t:P:i:s:a:b:g:m:d:p:w:h -l help,name:,target:,port:,id:,root-size:,ip:,bridge:,gateway:,memory:,disk-storage:,password:,ssh-password: -- "$@")
+if [ $? -ne 0 ]; then
+    usage
+    exit 1
+fi
+eval set -- "$options"
+
+# Processa as opções da linha de comando
+while true
+do
+    case "$1" in
+        -h|--help)          usage && exit 0;;
+        -n|--name)          name=$2; shift 2;;
+        -t|--target)        target=$2; shift 2;;
+        -P|--port)          port=$2; shift 2;;
+        -i|--id)            id=$2; shift 2;;
+        -s|--root-size)     rootsize=$2; shift 2;;
+        -a|--ip)            ip=$2; shift 2;;
+        -b|--bridge)        bridge=$2; shift 2;;
+        -g|--gateway)       gateway=$2; shift 2;;
+        -m|--memory)        memory=$2; shift 2;;
+        -p|--password)      password=$2; shift 2;;
+        -d|--disk-storage)  storage=$2; shift 2;;
+        -w|--ssh-password)  ssh_password=$2; shift 2;;
+        --)                 shift; break ;;
+        *)                  break ;;
+    esac
+done
+
+# Valida se todos os parâmetros obrigatórios foram fornecidos
+if [ -z "$name" ] || [ -z "$target" ] || [ -z "$port" ] || [ -z "$id" ] || [ -z "$rootsize" ] || [ -z "$ip" ] || [ -z "$bridge" ] || [ -z "$memory" ] || [ -z "$storage" ] || [ -z "$password" ] || [ -z "$ssh_password" ]; then
+    echo "❌ Erro: Faltando parâmetros obrigatórios."
+    usage
+    exit 1
+fi
+
+# Define a função para coletar o sistema de arquivos, com todas as correções
+collectFS() {
+    tar -czvf - -C / \
+    --mtime='1970-01-01' \
+    --exclude="./boot" \
+    --exclude="./lib/modules" \
+    --exclude="./sys" \
+    --exclude="./dev" \
+    --exclude="./run" \
+    --exclude="./proc" \
+    --exclude="*.log" \
+    --exclude="*.log*" \
+    --exclude="*.gz" \
+    --exclude="*.sql" \
+    --exclude="./swap.img" \
+    --exclude="./tmp" \
+    --exclude="./var/tmp" \
+    --exclude="./var/lib/docker" \
+    --exclude="./var/lib/containers" \
+    --exclude="./var/cache" \
+    --exclude="./var/log" \
+    --exclude="./var/backups" \
+    --exclude="./mnt" \
+    --exclude="./media" \
+    .
+}
+
+echo "🚀 Iniciando o processo de migração..."
+echo "📡 Coletando sistema de arquivos de $target... Isso pode levar vários minutos."
+
+# Conecta via SSH na máquina de origem, executa a função de coleta e salva em um arquivo temporário
+if ! sshpass -p "$ssh_password" ssh -p "$port" -o "StrictHostKeyChecking=no" "root@$target" "$(typeset -f collectFS); collectFS" > "/tmp/$name.tar.gz"; then
+    echo "❌ Falha ao coletar o sistema de arquivos da máquina de origem."
+    exit 1
+fi
+
+echo "✅ Sistema de arquivos coletado com sucesso."
+echo "📦 Preparando para criar o container $id ($name)..."
+
+# Detecta o tipo do storage para formatar o parâmetro rootfs corretamente
 storage_type=$(pvesm status | awk -v s="$storage" '$1==s {print $2}')
-
-# Remove G/M se for dir
 if [ "$storage_type" = "dir" ]; then
     rootsize_num=$(echo "$rootsize" | sed 's/[GM]//I')
     rootfs_param="$storage:$rootsize_num"
@@ -19,14 +118,14 @@ else
     rootfs_param="$storage:$rootsize"
 fi
 
-# Set network configuration based on IP type
+# Define a configuração de rede com base no tipo de IP
 if [ "$ip" = "dhcp" ]; then
     net_config="name=eth0,bridge=$bridge,ip=dhcp"
 else
     net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
 fi
 
-# Criar um script temporário para o comando 'pct create'
+# Cria um script temporário para o comando 'pct create' para ser executado pelo 'at'
 CREATE_SCRIPT="/tmp/create_ct_${id}.sh"
 cat > "$CREATE_SCRIPT" << EOF
 #!/bin/bash
@@ -37,7 +136,7 @@ pct create $id "/tmp/$name.tar.gz" \\
   --memory "$memory" \\
   --net0 "$net_config" \\
   --password "$password" \\
-  --description "Migrated from $target" \\
+  --description "Migrado de $target" \\
   --nameserver 8.8.8.8 \\
   --features nesting=1 \\
   --unprivileged
@@ -45,25 +144,25 @@ EOF
 
 chmod +x "$CREATE_SCRIPT"
 
-echo "🚀 Executing container creation in a detached session to avoid TTY errors..."
+echo "🚀 Executando a criação do contêiner em uma sessão separada para evitar erros de TTY..."
 
-# Executa o script de criação usando 'at' para garantir um ambiente limpo
+# Executa o script de criação usando 'at' para garantir um ambiente de execução limpo
 if ! at -f "$CREATE_SCRIPT" now; then
-    echo "❌ Failed to schedule container creation task using 'at'. Make sure 'atd' service is running."
+    echo "❌ Falha ao agendar a tarefa de criação do contêiner com 'at'. Verifique se o serviço 'atd' está instalado e em execução."
     rm -f "$CREATE_SCRIPT"
     rm -f "/tmp/$name.tar.gz"
     exit 1
 fi
 
-# Aguarda a criação do contêiner verificando seu status
-echo "⏳ Waiting for container $id to be created... (this may take a few minutes)"
-TIMEOUT=600 # 10 minutos de timeout
+# Aguarda a criação do contêiner verificando seu status periodicamente
+echo "⏳ Aguardando a criação do contêiner $id... (Isso pode levar vários minutos)"
+TIMEOUT=1800 # Aumentado para 30 minutos
 COUNT=0
 while ! pct status "$id" &> /dev/null; do
     sleep 5
     COUNT=$((COUNT + 5))
     if [ "$COUNT" -ge "$TIMEOUT" ]; then
-        echo "❌ Timeout: Container $id was not created within $TIMEOUT seconds."
+        echo "❌ Timeout: O contêiner $id não foi criado em $TIMEOUT segundos. Verifique os logs de tarefas na interface web do Proxmox para detalhes."
         rm -f "$CREATE_SCRIPT"
         rm -f "/tmp/$name.tar.gz"
         exit 1
@@ -74,34 +173,34 @@ echo ""
 
 # Verifica se o contêiner realmente existe após o loop
 if pct status "$id" &> /dev/null; then
-    echo "✅ Container created successfully!"
-    echo "🚀 Starting container $id..."
+    echo "✅ Contêiner criado com sucesso!"
+    echo "🚀 Iniciando o contêiner $id..."
 
     if pct start "$id"; then
-        echo "🎉 Migration completed successfully!"
-        echo "📋 Container details:"
+        echo "🎉 Migração concluída com sucesso!"
+        echo "📋 Detalhes do Contêiner:"
         echo "   ID: $id"
-        echo "   Name: $name"
-        echo "   IP: $ip (may take a moment to acquire if DHCP)"
-        echo "   Memory: ${memory}MB"
+        echo "   Nome: $name"
+        echo "   IP: $ip (pode levar um momento para obter se for DHCP)"
+        echo "   Memória: ${memory}MB"
         echo "   Storage: $storage"
         echo ""
-        echo "💡 Useful commands:"
-        echo "   pct enter $id    # Enter container"
-        echo "   pct stop $id     # Stop container"
-        echo "   pct status $id   # Check status"
+        echo "💡 Comandos úteis:"
+        echo "   pct enter $id    # Entrar no contêiner"
+        echo "   pct stop $id     # Parar o contêiner"
+        echo "   pct status $id   # Verificar o status"
     else
-        echo "⚠️  Container created but failed to start"
-        echo "💡 Try manually: pct start $id"
+        echo "⚠️  O contêiner foi criado mas falhou ao iniciar."
+        echo "💡 Tente manualmente: pct start $id"
     fi
 else
-    echo "❌ Failed to create container after detached execution."
+    echo "❌ Falha ao criar o contêiner após a execução separada. Verifique os logs de tarefas na interface web do Proxmox."
     exit 1
 fi
 
 # Remove os arquivos temporários
-echo "🧹 Cleaning up temporary files..."
+echo "🧹 Limpando arquivos temporários..."
 rm -f "$CREATE_SCRIPT"
 rm -f "/tmp/$name.tar.gz"
 
-echo "✨ Migration process completed!"
+echo "✨ Processo de migração finalizado!"
