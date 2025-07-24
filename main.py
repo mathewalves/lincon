@@ -17,6 +17,11 @@ from utils.exceptions import *
 console = Console()
 logger = setup_logging()
 
+current_language = "pt-br"
+
+def get_text(key):
+    return translations[current_language].get(key, key)
+
 LINCON_BANNER = """
  [bold bright_cyan]██╗     ██╗███╗   ██╗ ██████╗ ██████╗ ███╗   ██╗
  ██║     ██║████╗  ██║██╔════╝██╔═══██╗████╗  ██║
@@ -48,10 +53,12 @@ def select_language():
         padding=(1, 2)
     ))
     
-    choice = Prompt.ask("[bright_cyan]Escolha / Choose[/bright_cyan]", choices=["1", "2"], default="1")
+    choice = Prompt.ask("[bright_cyan]" + get_text("select_language") + "[/bright_cyan]", choices=["1", "2"], default="1")
     return "pt-br" if choice == "1" else "en"
 
 def show_menu(language):
+    global current_language
+    current_language = language
     while True:
         console.clear()
         # Mostra a arte ASCII do LINCON e informações
@@ -63,16 +70,16 @@ def show_menu(language):
         version = get_lincon_version()
         
         system_table = Table(show_header=False, box=None)
-        system_table.add_row("[bright_cyan]ℹ System Information:[/bright_cyan]")
+        system_table.add_row("[bright_cyan]ℹ " + get_text("system_info") + ":[/bright_cyan]")
         system_table.add_row(f"[bright_black]→[/bright_black] OS: {sys_info['os']} {sys_info['release']}")
         system_table.add_row(f"[bright_black]→[/bright_black] Python: {sys_info['python_version']}")
         system_table.add_row(f"[bright_black]→[/bright_black] LINCON: {version}")
         system_table.add_row("")
         
         status_table = Table(show_header=False, box=None)
-        status_table.add_row("[bright_cyan]✓ Components Status:[/bright_cyan]")
-        docker_status = "[green]Available[/green]" if sys_status["docker"] else "[red]Not Available[/red]"
-        proxmox_status = "[green]Available[/green]" if sys_status["proxmox"] else "[red]Not Available[/red]"
+        status_table.add_row("[bright_cyan]✓ " + get_text("components_status") + ":[/bright_cyan]")
+        docker_status = "[green]" + get_text("available") + "[/green]" if sys_status["docker"] else "[red]" + get_text("not_available") + "[/red]"
+        proxmox_status = "[green]" + get_text("available") + "[/green]" if sys_status["proxmox"] else "[red]" + get_text("not_available") + "[/red]"
         status_table.add_row(f"[bright_black]→[/bright_black] Docker: {docker_status}")
         status_table.add_row(f"[bright_black]→[/bright_black] Proxmox: {proxmox_status}")
         status_table.add_row("")
@@ -86,31 +93,31 @@ def show_menu(language):
         menu_table.add_column(style="bright_white", width=25)
         menu_table.add_column(style="dim")
         
-        menu_table.add_row("1", translations[language]["MENU_LINUX_DOCKER"], "🐳")
-        menu_table.add_row("2", translations[language]["MENU_LINUX_PROXMOX"], "📦")
-        menu_table.add_row("3", translations[language]["MENU_EXIT"], "👋")
+        menu_table.add_row("1", get_text("MENU_LINUX_DOCKER"), "🐳")
+        menu_table.add_row("2", get_text("MENU_LINUX_PROXMOX"), "📦")
+        menu_table.add_row("3", get_text("MENU_EXIT"), "👋")
         
         console.print(Panel(
             menu_table,
-            title=f"[bold bright_green]{translations[language]['TITLE_WELCOME']}[/bold bright_green]",
-            subtitle=f"[dim]{translations[language]['MSG_WELCOME']}[/dim]",
+            title=f"[bold bright_green]{get_text('TITLE_WELCOME')}[/bold bright_green]",
+            subtitle=f"[dim]{get_text('MSG_WELCOME')}[/dim]",
             border_style="bright_green",
             padding=(1, 2)
         ))
         
-        choice = Prompt.ask("[bright_cyan]Escolha uma opção[/bright_cyan]", choices=["1", "2", "3"])
+        choice = Prompt.ask("[bright_cyan]" + get_text("select_option") + "[/bright_cyan]", choices=["1", "2", "3"])
         
         if choice == "3":
-            console.print(translations[language]["goodbye"], style="bold yellow")
+            console.print(get_text("goodbye"), style="bold yellow")
             break
         elif choice == "1":
             from migrate_docker import migrate_docker
             migrate_docker()
-            input("\nPressione Enter para continuar...")
+            input("\n" + get_text("press_enter_to_continue"))
         elif choice == "2":
             from migrate_lxc import migrate_lxc
             migrate_lxc()
-            input("\nPressione Enter para continuar...")
+            input("\n" + get_text("press_enter_to_continue"))
 
 def main():
     language = select_language()
