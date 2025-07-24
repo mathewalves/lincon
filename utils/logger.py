@@ -13,8 +13,8 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler()
+            logging.FileHandler(log_file)
+            # Remova o StreamHandler para não poluir o console!
         ]
     )
     

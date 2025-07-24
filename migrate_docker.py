@@ -17,11 +17,10 @@ import logging
 
 logger = logging.getLogger('lincon')
 console = Console()
-current_language = os.environ.get("LINCON_LANG", "pt-br")
 
 def get_text(key):
-    """Obtém texto traduzido"""
-    return translations[current_language].get(key, key)
+    lang = os.environ.get("LINCON_LANG", "pt-br")
+    return translations[lang].get(key, key)
 
 def display_error(message_key):
     """Exibe um erro usando tradução"""
