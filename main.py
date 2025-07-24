@@ -13,11 +13,13 @@ from utils.system_info import get_system_info, get_system_status, get_lincon_ver
 from utils.logger import setup_logging
 from utils.exceptions import *
 
+import os
+
 # Configuração inicial
 console = Console()
 logger = setup_logging()
 
-current_language = "pt-br"
+current_language = os.environ.get("LINCON_LANG", "pt-br")
 
 def get_text(key):
     return translations[current_language].get(key, key)
@@ -121,6 +123,7 @@ def show_menu(language):
 
 def main():
     language = select_language()
+    os.environ["LINCON_LANG"] = language  # <-- Adiciona esta linha
     show_menu(language)
 
 if __name__ == "__main__":

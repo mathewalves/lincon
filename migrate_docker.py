@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger('lincon')
 console = Console()
-current_language = "pt-br"
+current_language = os.environ.get("LINCON_LANG", "pt-br")
 
 def get_text(key):
     """Obtém texto traduzido"""
