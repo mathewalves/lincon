@@ -1,106 +1,12 @@
 #!/bin/bash
 
-# Check if the 'pct' command is available on the host machine (Proxmox)
-if ! command -v pct &> /dev/null
-then
-    echo "pct could not be found. This script must be run on the host machine Proxmox"
-    exit 1
-fi
+# ... (toda a parte inicial de verificação e obtenção de parâmetros permanece a mesma) ...
+# Apenas a parte final, após "Creating container", será modificada.
 
-# Function to display script usage
-usage()
-{
-    cat <<EOF
-$1 -h|--help
- -n|--name [LXC container name]
- -t|--target [target machine SSH URI]
- -P|--port [target SSH port]
- -i|--id [Proxmox container ID]
- -s|--root-size [rootfs size in GB]
- -a|--ip [target container IP]
- -b|--bridge [bridge interface]
- -g|--gateway [gateway IP]
- -m|--memory [memory in MB]
- -d|--disk-storage [target Proxmox storage pool]
- -p|--password [root password for container (min. 5 chars)]
- -w|--ssh-password [SSH password for target machine]
-EOF
-    return 0
-}
-
-# Parse command-line options
-options=$(getopt -o n:t:P:i:s:a:b:g:m:d:p:w:h -l help,name:,target:,port:,id:,root-size:,ip:,bridge:,gateway:,memory:,disk-storage:,password:,ssh-password: -- "$@")
-if [ $? -ne 0 ]; then
-    usage "$(basename "$0")"
-    exit 1
-fi
-eval set -- "$options"
-
-# Process command-line options
-while true
-do
-    case "$1" in
-        -h|--help)          usage "$0" && exit 0;;
-        -n|--name)          name=$2; shift 2;;
-        -t|--target)        target=$2; shift 2;;
-        -P|--port)          port=$2; shift 2;;
-        -i|--id)            id=$2; shift 2;;
-        -s|--root-size)     rootsize=$2; shift 2;;
-        -a|--ip)            ip=$2; shift 2;;
-        -b|--bridge)        bridge=$2; shift 2;;
-        -g|--gateway)       gateway=$2; shift 2;;
-        -m|--memory)        memory=$2; shift 2;;
-        -p|--password)      password=$2; shift 2;;
-        -d|--disk-storage)  storage=$2; shift 2;;
-        -w|--ssh-password)  ssh_password=$2; shift 2;;
-        --)                 shift; break ;;
-        *)                  break ;;
-    esac
-done
-
-# Validate required parameters
-if [ -z "$name" ] || [ -z "$target" ] || [ -z "$port" ] || [ -z "$id" ] || [ -z "$rootsize" ] || [ -z "$ip" ] || [ -z "$bridge" ] || [ -z "$gateway" ] || [ -z "$memory" ] || [ -z "$storage" ] || [ -z "$password" ] || [ -z "$ssh_password" ]; then
-    echo "Error: Missing required parameters"
-    usage "$(basename "$0")"
-    exit 1
-fi
-
-# Function to collect file system data, excluding unnecessary directories and files
-collectFS() {
-    # CORRIGIDO: Adicionado --exclude para /boot e /lib/modules
-    tar -czvf - -C / \
-    --exclude="./boot" \
-    --exclude="./lib/modules" \
-    --exclude="./sys" \
-    --exclude="./dev" \
-    --exclude="./run" \
-    --exclude="./proc" \
-    --exclude="*.log" \
-    --exclude="*.log*" \
-    --exclude="*.gz" \
-    --exclude="*.sql" \
-    --exclude="./swap.img" \
-    --exclude="./tmp" \
-    --exclude="./var/tmp" \
-    --exclude="./var/cache" \
-    --exclude="./var/log" \
-    --exclude="./var/backups" \
-    --exclude="./mnt" \
-    --exclude="./media" \
-    .
-}
-
-echo "🚀 Starting container migration..."
-echo "📡 Collecting filesystem from $target..."
-
-# SSH into the target machine, execute the file system collection function, and save to a temporary file
-if ! sshpass -p "$ssh_password" ssh -p "$port" -o "StrictHostKeyChecking=no" "root@$target" "$(typeset -f collectFS); collectFS" > "/tmp/$name.tar.gz"; then
-    echo "❌ Failed to collect filesystem from target machine"
-    exit 1
-fi
-
-echo "✅ Filesystem collected successfully"
+# Copie e cole todo o seu script até esta linha:
 echo "📦 Creating container $id ($name)..."
+
+# ---> INÍCIO DA SEÇÃO MODIFICADA <---
 
 # Detecta tipo do storage
 storage_type=$(pvesm status | awk -v s="$storage" '$1==s {print $2}')
@@ -120,25 +26,57 @@ else
     net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
 fi
 
-echo "Comando a ser executado:"
-echo "pct create $id /tmp/$name.tar.gz --rootfs \"$rootfs_param\" --storage \"$storage\" --hostname \"$name\" --memory \"$memory\" --net0 \"$net_config\" --password [SENHA] --unprivileged --features nesting=1"
-
-# CORRIGIDO: Adicionado --unprivileged e consolidado o comando
-if pct create "$id" "/tmp/$name.tar.gz" \
-  --rootfs "$rootfs_param" \
-  --storage "$storage" \
-  --hostname "$name" \
-  --memory "$memory" \
-  --net0 "$net_config" \
-  --password "$password" \
-  --description "Migrated from $target" \
-  --nameserver 8.8.8.8 \
-  --features nesting=1 \
+# Criar um script temporário para o comando 'pct create'
+CREATE_SCRIPT="/tmp/create_ct_${id}.sh"
+cat > "$CREATE_SCRIPT" << EOF
+#!/bin/bash
+pct create $id "/tmp/$name.tar.gz" \\
+  --rootfs "$rootfs_param" \\
+  --storage "$storage" \\
+  --hostname "$name" \\
+  --memory "$memory" \\
+  --net0 "$net_config" \\
+  --password "$password" \\
+  --description "Migrated from $target" \\
+  --nameserver 8.8.8.8 \\
+  --features nesting=1 \\
   --unprivileged
-then
+EOF
+
+chmod +x "$CREATE_SCRIPT"
+
+echo "🚀 Executing container creation in a detached session to avoid TTY errors..."
+
+# Executa o script de criação usando 'at' para garantir um ambiente limpo
+if ! at -f "$CREATE_SCRIPT" now; then
+    echo "❌ Failed to schedule container creation task using 'at'. Make sure 'atd' service is running."
+    rm -f "$CREATE_SCRIPT"
+    rm -f "/tmp/$name.tar.gz"
+    exit 1
+fi
+
+# Aguarda a criação do contêiner verificando seu status
+echo "⏳ Waiting for container $id to be created... (this may take a few minutes)"
+TIMEOUT=600 # 10 minutos de timeout
+COUNT=0
+while ! pct status "$id" &> /dev/null; do
+    sleep 5
+    COUNT=$((COUNT + 5))
+    if [ "$COUNT" -ge "$TIMEOUT" ]; then
+        echo "❌ Timeout: Container $id was not created within $TIMEOUT seconds."
+        rm -f "$CREATE_SCRIPT"
+        rm -f "/tmp/$name.tar.gz"
+        exit 1
+    fi
+    echo -n "."
+done
+echo ""
+
+# Verifica se o contêiner realmente existe após o loop
+if pct status "$id" &> /dev/null; then
     echo "✅ Container created successfully!"
     echo "🚀 Starting container $id..."
-    
+
     if pct start "$id"; then
         echo "🎉 Migration completed successfully!"
         echo "📋 Container details:"
@@ -157,12 +95,13 @@ then
         echo "💡 Try manually: pct start $id"
     fi
 else
-    echo "❌ Failed to create container"
+    echo "❌ Failed to create container after detached execution."
     exit 1
 fi
 
-# Remove the temporary file
+# Remove os arquivos temporários
 echo "🧹 Cleaning up temporary files..."
+rm -f "$CREATE_SCRIPT"
 rm -f "/tmp/$name.tar.gz"
 
 echo "✨ Migration process completed!"
