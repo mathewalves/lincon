@@ -67,25 +67,26 @@ fi
 
 # Function to collect file system data, excluding unnecessary directories and files
 collectFS() {
+    # CORRIGIDO: Adicionado --exclude para /boot e /lib/modules
     tar -czvf - -C / \
-    --exclude="sys" \
-    --exclude="dev" \
-    --exclude="run" \
-    --exclude="proc" \
+    --exclude="./boot" \
+    --exclude="./lib/modules" \
+    --exclude="./sys" \
+    --exclude="./dev" \
+    --exclude="./run" \
+    --exclude="./proc" \
     --exclude="*.log" \
     --exclude="*.log*" \
     --exclude="*.gz" \
     --exclude="*.sql" \
-    --exclude="swap.img" \
-    --exclude="tmp" \
-    --exclude="var/tmp" \
-    --exclude="var/lib/docker" \
-    --exclude="var/lib/containers" \
-    --exclude="var/cache" \
-    --exclude="var/log" \
-    --exclude="var/backups" \
-    --exclude="mnt" \
-    --exclude="media" \
+    --exclude="./swap.img" \
+    --exclude="./tmp" \
+    --exclude="./var/tmp" \
+    --exclude="./var/cache" \
+    --exclude="./var/log" \
+    --exclude="./var/backups" \
+    --exclude="./mnt" \
+    --exclude="./media" \
     .
 }
 
@@ -119,51 +120,31 @@ else
     net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
 fi
 
-echo "id: $id"
-echo "name: $name"
-echo "storage: $storage"
-echo "rootsize: $rootsize"
-echo "memory: $memory"
-echo "bridge: $bridge"
-echo "ip: $ip"
-echo "gateway: $gateway"
-echo "rootfs_param: $rootfs_param"
+echo "Comando a ser executado:"
+echo "pct create $id /tmp/$name.tar.gz --rootfs \"$rootfs_param\" --storage \"$storage\" --hostname \"$name\" --memory \"$memory\" --net0 \"$net_config\" --password [SENHA] --unprivileged --features nesting=1"
 
-if [ -z "$id" ] || [ -z "$rootfs_param" ] || [ -z "$storage" ] || [ -z "$name" ] || [ -z "$memory" ] || [ -z "$net_config" ] || [ -z "$password" ]; then
-  echo "❌ Erro: Um ou mais parâmetros obrigatórios estão vazios!"
-  echo "id: $id"
-  echo "rootfs_param: $rootfs_param"
-  echo "storage: $storage"
-  echo "name: $name"
-  echo "memory: $memory"
-  echo "net_config: $net_config"
-  echo "password: $password"
-  exit 1
-fi
-
-echo "Comando real a ser executado:"
-echo pct create "$id" "/tmp/$name.tar.gz" --rootfs "$rootfs_param" --storage "$storage" --hostname "$name" --memory "$memory" --net0 "$net_config" -password "$password"
-
+# CORRIGIDO: Adicionado --unprivileged e consolidado o comando
 if pct create "$id" "/tmp/$name.tar.gz" \
-  -description "LXC" \
-  -hostname "$name" \
-  --features nesting=1 \
-  -memory "$memory" -nameserver 8.8.8.8 \
-  -net0 "$net_config" \
   --rootfs "$rootfs_param" \
-  -password "$password"
+  --storage "$storage" \
+  --hostname "$name" \
+  --memory "$memory" \
+  --net0 "$net_config" \
+  --password "$password" \
+  --description "Migrated from $target" \
+  --nameserver 8.8.8.8 \
+  --features nesting=1 \
+  --unprivileged
 then
-    
     echo "✅ Container created successfully!"
     echo "🚀 Starting container $id..."
     
-    # Start the container
     if pct start "$id"; then
         echo "🎉 Migration completed successfully!"
         echo "📋 Container details:"
         echo "   ID: $id"
         echo "   Name: $name"
-        echo "   IP: $ip"
+        echo "   IP: $ip (may take a moment to acquire if DHCP)"
         echo "   Memory: ${memory}MB"
         echo "   Storage: $storage"
         echo ""
@@ -182,6 +163,6 @@ fi
 
 # Remove the temporary file
 echo "🧹 Cleaning up temporary files..."
-rm -rf "/tmp/$name.tar.gz"
+rm -f "/tmp/$name.tar.gz"
 
-echo "✨ Migration process completed!" 
+echo "✨ Migration process completed!"
