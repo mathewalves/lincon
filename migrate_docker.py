@@ -108,95 +108,95 @@ def user_input():
     data = {}
     
     # Nome do Container
-    console.print(f"[cyan]📦 Nome do Container Docker[/cyan]")
-    console.print(f"[dim]💡 Use nomes descritivos sem espaços (ex: web-app, api-server)[/dim]")
+    console.print(f"[cyan]📦 {get_text('DOCKER_CONTAINER_NAME')}[/cyan]")
+    console.print(f"[dim]💡 {get_text('DOCKER_CONTAINER_NAME_DESC')}[/dim]")
     
     while True:
-        container_name = Prompt.ask("Nome do Container Docker")
+        container_name = Prompt.ask(get_text("DOCKER_CONTAINER_NAME"))
         if container_name and len(container_name) >= 3:
             data["container_name"] = container_name
             break
         else:
-            console.print(f"[red]❌ Nome deve ter pelo menos 3 caracteres![/red]")
+            console.print(f"[red]❌ {get_text('DOCKER_CONTAINER_NAME_ERROR')}[/red]")
     
     # Host de origem
-    console.print(f"\n[cyan]🖥️  Servidor de Origem[/cyan]")
-    console.print(f"[dim]💡 Use IP ou hostname do servidor Linux a ser migrado[/dim]")
+    console.print(f"\n[cyan]🖥️  {get_text('SOURCE_SERVER')}[/cyan]")
+    console.print(f"[dim]💡 {get_text('SOURCE_SERVER_DESC')}[/dim]")
     
     while True:
-        target = Prompt.ask("Host/IP de origem")
+        target = Prompt.ask(get_text("SOURCE_SERVER"))
         if target and len(target) >= 3:
             data["target"] = target
             break
         else:
-            console.print(f"[red]❌ Host inválido![/red]")
+            console.print(f"[red]❌ {get_text('SOURCE_SERVER_ERROR')}[/red]")
     
     # Porta SSH
-    console.print(f"\n[cyan]🔌 Porta SSH (Host: {data['target']})[/cyan]")
+    console.print(f"\n[cyan]🔌 {get_text('SSH_PORT')}[/cyan]")
     
     while True:
-        port = Prompt.ask("Porta SSH", default="22")
+        port = Prompt.ask(get_text("SSH_PORT"), default="22")
         try:
             port_num = int(port)
             if 1 <= port_num <= 65535:
                 data["port"] = port
                 break
             else:
-                console.print(f"[red]❌ Porta deve estar entre 1-65535![/red]")
+                console.print(f"[red]❌ {get_text('SSH_PORT_ERROR')}[/red]")
         except ValueError:
-            console.print(f"[red]❌ Digite apenas números![/red]")
+            console.print(f"[red]❌ {get_text('SSH_PORT_ERROR_DIGIT')}[/red]")
     
     # Senha SSH
-    console.print(f"\n[cyan]🔐 Credenciais SSH[/cyan]")
-    console.print(f"[yellow]⚠️  A senha será usada para conectar como root no servidor de origem[/yellow]")
+    console.print(f"\n[cyan]🔐 {get_text('SSH_CREDENTIALS')}[/cyan]")
+    console.print(f"[yellow]⚠️  {get_text('SSH_PASSWORD_WARNING')}[/yellow]")
     
     while True:
-        password = Prompt.ask("Senha SSH do root", password=True)
+        password = Prompt.ask(get_text("SSH_PASSWORD"), password=True)
         if password:
             if test_ssh_connection(data["target"], data["port"], password):
                 data["passwordSSH"] = password
                 break
             else:
-                if not Confirm.ask("Tentar outra senha?"):
+                if not Confirm.ask(get_text("TRY_ANOTHER_PASSWORD")):
                     return None
         else:
-            console.print(f"[red]❌ Senha não pode estar vazia![/red]")
+            console.print(f"[red]❌ {get_text('SSH_PASSWORD_EMPTY')}[/red]")
     
     # Configuração de rede
-    console.print(f"\n[cyan]🌐 Configuração de Rede[/cyan]")
+    console.print(f"\n[cyan]🌐 {get_text('NETWORK_CONFIG')}[/cyan]")
     
     table = Table(show_header=True, box=None)
-    table.add_column("Opção", style="cyan", width=6)
-    table.add_column("Tipo", style="green", width=15)
-    table.add_column("Descrição", style="dim")
+    table.add_column(get_text("NETWORK_OPTION"), style="cyan", width=6)
+    table.add_column(get_text("NETWORK_TYPE"), style="green", width=15)
+    table.add_column(get_text("NETWORK_DESCRIPTION"), style="dim")
     
-    table.add_row("[1]", "Bridge padrão", "docker0 (padrão)")
-    table.add_row("[2]", "Host network", "Usa rede do host")
-    table.add_row("[3]", "Personalizada", "Rede customizada")
+    table.add_row(get_text("NETWORK_OPTION_1"), get_text("NETWORK_TYPE_1"), get_text("NETWORK_DESCRIPTION_1"))
+    table.add_row(get_text("NETWORK_OPTION_2"), get_text("NETWORK_TYPE_2"), get_text("NETWORK_DESCRIPTION_2"))
+    table.add_row(get_text("NETWORK_OPTION_3"), get_text("NETWORK_TYPE_3"), get_text("NETWORK_DESCRIPTION_3"))
 
     console.print(table)
     
-    network_choice = Prompt.ask("Escolha o tipo de rede", choices=["1", "2", "3"], default="1")
+    network_choice = Prompt.ask(get_text("CHOOSE_NETWORK_TYPE"), choices=["1", "2", "3"], default="1")
     
     if network_choice == "1":
         data["network"] = "bridge"
     elif network_choice == "2":
         data["network"] = "host"
     else:
-        data["network"] = Prompt.ask("Nome da rede personalizada")
+        data["network"] = Prompt.ask(get_text("CUSTOM_NETWORK_NAME"))
     
     # Configuração de portas
     if data["network"] != "host":
-        console.print(f"\n[cyan]🔗 Mapeamento de Portas[/cyan]")
-        console.print(f"[dim]💡 Formato: 80:80,443:443 (porta_host:porta_container)[/dim]")
-        data["ports"] = Prompt.ask("Mapeamento de portas (opcional)", default="")
+        console.print(f"\n[cyan]🔗 {get_text('PORT_MAPPING')}[/cyan]")
+        console.print(f"[dim]💡 {get_text('PORT_MAPPING_FORMAT')}[/dim]")
+        data["ports"] = Prompt.ask(get_text("PORT_MAPPING_PROMPT"), default="")
     else:
         data["ports"] = ""
     
     # Configuração de volumes
-    console.print(f"\n[cyan]💾 Volumes Extras[/cyan]")
-    console.print(f"[dim]💡 Formato: /host/path:/container/path[/dim]")
-    data["volumes"] = Prompt.ask("Volumes extras (opcional)", default="")
+    console.print(f"\n[cyan]💾 {get_text('EXTRA_VOLUMES')}[/cyan]")
+    console.print(f"[dim]💡 {get_text('EXTRA_VOLUMES_FORMAT')}[/dim]")
+    data["volumes"] = Prompt.ask(get_text("EXTRA_VOLUMES_PROMPT"), default="")
     
     return data
 
@@ -260,7 +260,7 @@ def convert_with_feedback(data):
     with tempfile.TemporaryDirectory(prefix=f"{data['container_name']}_migration_") as temp_dir:
         temp_path = Path(temp_dir)
         
-        console.print(f"[cyan]📡 Coletando sistema de arquivos...[/cyan]")
+        console.print(f"[cyan]📡 {get_text('COLLECTING_FILESYSTEM')}[/cyan]")
         
         ssh_command = [
             "sshpass", "-p", data["passwordSSH"],
@@ -278,11 +278,11 @@ def convert_with_feedback(data):
             with open(filesystem_tar, 'wb') as f:
                 with Progress(
                     SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
+                    TextColumn(f"[progress.description]{get_text('COLLECTING_DATA')}[/progress.description]"),
                     BarColumn(),
                     console=console
                 ) as progress:
-                    task = progress.add_task("🔄 Coletando dados...", total=None)
+                    task = progress.add_task(f"🔄 {get_text('COLLECTING_DATA')}", total=None)
                     
                     for chunk in process.stdout:
                         f.write(chunk)
@@ -293,13 +293,13 @@ def convert_with_feedback(data):
                 return False
                 
             if filesystem_tar.stat().st_size == 0:
-                console.print(f"[red]❌ Coleta do sistema de arquivos falhou[/red]")
+                console.print(f"[red]❌ {get_text('FILESYSTEM_COLLECTION_FAILED')}[/red]")
                 return False
             
             size_mb = filesystem_tar.stat().st_size / (1024 * 1024)
-            console.print(f"[green]✅ Sistema coletado: {size_mb:.1f} MB[/green]")
+            console.print(f"[green]✅ {get_text('SYSTEM_COLLECTED')}: {size_mb:.1f} {get_text('MB')}[/green]")
             
-            console.print(f"[cyan]🐳 Construindo imagem Docker...[/cyan]")
+            console.print(f"[cyan]🐳 {get_text('BUILDING_DOCKER_IMAGE')}[/cyan]")
             
             # Cria Dockerfile
             dockerfile_path = temp_path / "Dockerfile"
@@ -314,21 +314,21 @@ def convert_with_feedback(data):
             
             with Progress(
                 SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
+                TextColumn(f"[progress.description]{get_text('BUILDING_IMAGE')}[/progress.description]"),
                 console=console
             ) as progress:
-                task = progress.add_task("🔨 Construindo imagem...", total=None)
+                task = progress.add_task(f"🔨 {get_text('BUILDING_IMAGE')}", total=None)
                 result = subprocess.run(build_command, capture_output=True, text=True)
             
             if result.returncode != 0:
-                console.print(f"[red]❌ Falha na construção da imagem:[/red]")
+                console.print(f"[red]❌ {get_text('DOCKER_IMAGE_BUILD_FAILED')}:[/red]")
                 console.print(f"[red]{result.stderr}[/red]")
                 return False
             
             display_success("MSG_DOCKER_IMAGE_CREATED")
             
             # Executa container
-            console.print(f"[cyan]🚀 Iniciando container Docker...[/cyan]")
+            console.print(f"[cyan]🚀 {get_text('STARTING_DOCKER_CONTAINER')}[/cyan]")
             
             run_command = ["docker", "run", "-d", "--name", data['container_name']]
             
@@ -359,74 +359,74 @@ def convert_with_feedback(data):
                 
                 # Mostra informações do container
                 console.print(f"\n" + "="*70)
-                console.print(f"[bold green]🎉 MIGRAÇÃO DOCKER CONCLUÍDA![/bold green]")
+                console.print(f"[bold green]{get_text('DOCKER_MIGRATION_COMPLETED')}[/bold green]")
                 console.print("="*70)
                 
-                console.print(f"[cyan]📦 Nome:[/cyan] {data['container_name']}")
-                console.print(f"[cyan]🐳 Imagem:[/cyan] lincon-migrated:{data['container_name']}")
-                console.print(f"[cyan]🌐 Rede:[/cyan] {data['network']}")
+                console.print(f"[cyan]{get_text('DOCKER_CONTAINER_NAME')}:[/cyan] {data['container_name']}")
+                console.print(f"[cyan]{get_text('DOCKER_IMAGE')}:[/cyan] lincon-migrated:{data['container_name']}")
+                console.print(f"[cyan]{get_text('DOCKER_NETWORK')}:[/cyan] {data['network']}")
                 
                 if data["network"] != "host" and data.get("ports"):
-                    console.print(f"[cyan]🔗 Portas:[/cyan] {data['ports']}")
+                    console.print(f"[cyan]{get_text('DOCKER_PORTS')}:[/cyan] {data['ports']}")
                 
                 if data.get("volumes"):
-                    console.print(f"[cyan]💾 Volumes:[/cyan] {data['volumes']}")
+                    console.print(f"[cyan]{get_text('DOCKER_VOLUMES')}:[/cyan] {data['volumes']}")
                 
-                console.print(f"\n[yellow]💡 Comandos úteis:[/yellow]")
-                console.print(f"[white]   docker exec -it {data['container_name']} /bin/bash[/white]  [dim]# Entrar no container[/dim]")
-                console.print(f"[white]   docker stop {data['container_name']}[/white]                [dim]# Parar container[/dim]")
-                console.print(f"[white]   docker start {data['container_name']}[/white]               [dim]# Iniciar container[/dim]")
-                console.print(f"[white]   docker logs {data['container_name']}[/white]                [dim]# Ver logs[/dim]")
+                console.print(f"\n[yellow]{get_text('DOCKER_USEFUL_COMMANDS')}:[/yellow]")
+                console.print(f"[white]   {get_text('DOCKER_EXEC_COMMAND')}[/white]  [dim]{get_text('DOCKER_EXEC_DESC')}[/dim]")
+                console.print(f"[white]   {get_text('DOCKER_STOP_COMMAND')}[/white]                [dim]{get_text('DOCKER_STOP_DESC')}[/dim]")
+                console.print(f"[white]   {get_text('DOCKER_START_COMMAND')}[/white]               [dim]{get_text('DOCKER_START_DESC')}[/dim]")
+                console.print(f"[white]   {get_text('DOCKER_LOGS_COMMAND')}[/white]                [dim]{get_text('DOCKER_LOGS_DESC')}[/dim]")
                 
                 return True
             else:
-                console.print(f"[red]❌ Falha ao iniciar container:[/red]")
+                console.print(f"[red]❌ {get_text('DOCKER_CONTAINER_START_FAILED')}:[/red]")
                 console.print(f"[red]{result.stderr}[/red]")
                 return False
                 
         except Exception as e:
             logger.error(f"Erro durante conversão: {e}")
-            console.print(f"[red]❌ Erro inesperado: {e}[/red]")
+            console.print(f"[red]❌ {get_text('UNEXPECTED_ERROR')}: {e}[/red]")
             return False
 
 def confirm_migration(data):
     """Confirma os detalhes da migração com o usuário"""
-    console.print(f"\n[bold cyan]📋 Confirmação da Migração Docker[/bold cyan]")
+    console.print(f"\n[bold cyan]{get_text('DOCKER_MIGRATION_CONFIRMATION_TITLE')}[/bold cyan]")
     
-    table = Table(title="[bold green]Detalhes da Migração Docker[/bold green]", show_header=True)
-    table.add_column("Item", style="cyan", width=20)
-    table.add_column("Valor", style="white")
+    table = Table(title=f"[bold green]{get_text('DOCKER_MIGRATION_DETAILS_TITLE')}[/bold green]", show_header=True)
+    table.add_column(get_text("DOCKER_MIGRATION_ITEM"), style="cyan", width=20)
+    table.add_column(get_text("DOCKER_MIGRATION_VALUE"), style="white")
     
-    table.add_row("🐳 Nome do Container", f"[bright_green]{data['container_name']}[/bright_green]")
-    table.add_row("🖥️  Servidor Origem", f"[bright_blue]{data['target']}:{data['port']}[/bright_blue]")
-    table.add_row("🌐 Rede", f"[bright_yellow]{data['network']}[/bright_yellow]")
+    table.add_row(get_text("DOCKER_MIGRATION_CONTAINER_NAME"), f"[bright_green]{data['container_name']}[/bright_green]")
+    table.add_row(get_text("DOCKER_MIGRATION_SOURCE_SERVER"), f"[bright_blue]{data['target']}:{data['port']}[/bright_blue]")
+    table.add_row(get_text("DOCKER_MIGRATION_NETWORK"), f"[bright_yellow]{data['network']}[/bright_yellow]")
     
     if data.get("ports"):
-        table.add_row("🔗 Portas", f"[bright_magenta]{data['ports']}[/bright_magenta]")
+        table.add_row(get_text("DOCKER_MIGRATION_PORTS"), f"[bright_magenta]{data['ports']}[/bright_magenta]")
     
     if data.get("volumes"):
-        table.add_row("💾 Volumes", f"[bright_cyan]{data['volumes']}[/bright_cyan]")
+        table.add_row(get_text("DOCKER_MIGRATION_VOLUMES"), f"[bright_cyan]{data['volumes']}[/bright_cyan]")
     
     console.print(table)
     console.print()
     
-    console.print(f"[yellow]⚠️  Esta operação irá:[/yellow]")
-    console.print(f"• Conectar ao servidor origem via SSH")
-    console.print(f"• Coletar todo o sistema de arquivos")
-    console.print(f"• Criar uma imagem Docker")
-    console.print(f"• Iniciar o container automaticamente")
+    console.print(f"[yellow]{get_text('DOCKER_MIGRATION_OPERATION_WARNING')}:[/yellow]")
+    console.print(f"• {get_text('DOCKER_MIGRATION_CONNECT_SOURCE')}")
+    console.print(f"• {get_text('DOCKER_MIGRATION_COLLECT_FS')}")
+    console.print(f"• {get_text('DOCKER_MIGRATION_CREATE_IMAGE')}")
+    console.print(f"• {get_text('DOCKER_MIGRATION_START_CONTAINER')}")
     
-    console.print(f"\n[cyan]💡 Certifique-se de que:[/cyan]")
-    console.print(f"• O Docker está instalado e rodando")
-    console.print(f"• O servidor origem está acessível")
-    console.print(f"• Há espaço suficiente em disco")
+    console.print(f"\n[cyan]{get_text('DOCKER_MIGRATION_CERTIFICATION_CHECK')}:[/cyan]")
+    console.print(f"• {get_text('DOCKER_MIGRATION_DOCKER_INSTALLED')}")
+    console.print(f"• {get_text('DOCKER_MIGRATION_SOURCE_ACCESSIBLE')}")
+    console.print(f"• {get_text('DOCKER_MIGRATION_ENOUGH_DISK')}")
     
-    return Confirm.ask(f"\n✅ Confirmar migração Docker?", default=False)
+    return Confirm.ask(f"\n✅ {get_text('CONFIRM_DOCKER_MIGRATION')}", default=False)
 
 def migrate_docker():
     """Função principal de migração para Docker com interface otimizada"""
     def handle_interrupt(signum, frame):
-        console.print(f"\n[yellow]⚠️  Migração Docker cancelada pelo usuário[/yellow]")
+        console.print(f"\n[yellow]⚠️  {get_text('DOCKER_MIGRATION_CANCELLED_BY_USER')}[/yellow]")
         exit(1)
     
     signal.signal(signal.SIGINT, handle_interrupt)
@@ -438,7 +438,7 @@ def migrate_docker():
     
     data = user_input()
     if not data:
-        console.print(f"\n[yellow]❌ Migração cancelada pelo usuário[/yellow]")
+        console.print(f"\n[yellow]❌ {get_text('MIGRATION_CANCELLED_BY_USER')}[/yellow]")
         return False
     
     state_manager.save_state(data, "input_collected")
@@ -449,7 +449,7 @@ def migrate_docker():
     state_manager.save_state(data, "validated")
     
     if not confirm_migration(data):
-        console.print(f"\n[yellow]❌ Migração cancelada pelo usuário[/yellow]")
+        console.print(f"\n[yellow]❌ {get_text('MIGRATION_CANCELLED_BY_USER')}[/yellow]")
         state_manager.save_state(data, "cancelled")
         return False
     

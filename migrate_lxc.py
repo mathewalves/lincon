@@ -7,6 +7,8 @@ from rich.live import Live
 from rich.text import Text
 from rich.spinner import Spinner
 from lang.translations import translations
+from utils.migration_state import MigrationState
+from utils.logger import setup_logging
 import subprocess
 import os
 import shutil
@@ -17,8 +19,11 @@ import threading
 import queue
 import select
 import fcntl
+from datetime import datetime
+import logging
 
 console = Console()
+logger = setup_logging()
 current_language = "pt-br"
 
 def get_text(key):
@@ -26,23 +31,27 @@ def get_text(key):
     return translations[current_language].get(key, key)
 
 def display_error(message_key):
-    """Exibe um erro usando tradução"""
+    """Exibe um erro usando tradução e registra log"""
     message = get_text(message_key)
+    logger.error(message)
     console.print(Panel(f"❌ {message}", title="❌ ERRO", style="red"))
 
 def display_success(message_key):
-    """Exibe sucesso usando tradução"""
+    """Exibe sucesso usando tradução e registra log"""
     message = get_text(message_key)
+    logger.info(message)
     console.print(Panel(f"✅ {message}", title="✅ SUCESSO", style="green"))
 
 def display_warning(message_key):
-    """Exibe aviso usando tradução"""
+    """Exibe aviso usando tradução e registra log"""
     message = get_text(message_key)
+    logger.warning(message)
     console.print(Panel(f"⚠️  {message}", title="⚠️  ATENÇÃO", style="yellow"))
 
 def display_recommendation(message_key):
-    """Exibe recomendação usando tradução"""
+    """Exibe recomendação usando tradução (não loga como warning)"""
     message = get_text(message_key)
+    logger.info(f"Recomendação: {message}")
     console.print(Panel(f"💡 {message}", title="💡 RECOMENDAÇÃO", style="cyan"))
 
 # Validações básicas
@@ -95,39 +104,42 @@ def validate_ct_id(ct_id):
 
 def check_dependencies():
     """Verifica dependências básicas"""
+    logger.info("Verificando dependências do sistema...")
     console.print(f"[cyan]🔍 {get_text('CHECKING_DEPS')}[/cyan]")
     
     missing_deps = []
     
     if not shutil.which("pct"):
-        missing_deps.append("pct (Proxmox Container Toolkit)")
+        missing_deps.append(get_text("PCT_DEP"))
     if not shutil.which("pvesm"):
-        missing_deps.append("pvesm (Proxmox VE Storage Manager)")
+        missing_deps.append(get_text("PVESM_DEP"))
     if not shutil.which("brctl"):
-        missing_deps.append("brctl (Bridge utilities)")
+        missing_deps.append(get_text("BRCTL_DEP"))
     
     if missing_deps:
         error_msg = get_text("MISSING_DEPS") + "\n" + "\n".join(f"• {dep}" for dep in missing_deps)
+        logger.error(f"Dependências faltando: {missing_deps}")
         console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
-        display_recommendation("DEPS_RECOMMENDATION")
+        display_recommendation(get_text("DEPS_RECOMMENDATION"))
         return False
 
     if not shutil.which("sshpass"):
-        console.print(f"[cyan]{get_text('INSTALLING_SSHPASS')}[/cyan]")
+        logger.info("Instalando sshpass...")
         try:
             subprocess.run(["apt-get", "update"], check=True, capture_output=True)
             subprocess.run(["apt-get", "install", "-y", "sshpass"], check=True, capture_output=True)
-            display_success("SSHPASS_INSTALLED")
+            display_success(get_text("SSHPASS_INSTALLED"))
         except subprocess.CalledProcessError:
-            display_error("SSH_INSTALL_FAILED")
+            logger.error("Falha ao instalar sshpass")
+            display_error(get_text("SSH_INSTALL_FAILED"))
             return False
     
-    display_success("ALL_DEPS_AVAILABLE")
+    display_success(get_text("ALL_DEPS_AVAILABLE"))
     return True
 
 def test_ssh_connection(target, port, password):
     """Testa conexão SSH com feedback visual"""
-    console.print(f"[cyan]🔍 {get_text('TESTING_SSH')}[/cyan]")
+    console.print(f"[cyan]�� {get_text('TESTING_SSH')}[/cyan]")
     
     try:
         cmd = [
@@ -142,22 +154,22 @@ def test_ssh_connection(target, port, password):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         
         if result.returncode == 0:
-            display_success("SSH_CONNECTION_OK")
+            display_success(get_text("SSH_CONNECTION_OK"))
             return True
         else:
             error_msg = get_text("SSH_CONNECTION_FAILED").format(result.stderr.strip())
             console.print(Panel(f"❌ {error_msg}", title="❌ ERRO", style="red"))
             
             if "Permission denied" in result.stderr:
-                display_error("SSH_PERMISSION_DENIED")
+                display_error(get_text("SSH_PERMISSION_DENIED"))
                 if Confirm.ask(get_text("SSH_CONTINUE_TUTORIAL")):
                     show_ssh_tutorial()
             else:
-                display_recommendation("SSH_CHECK_LIST")
+                display_recommendation(get_text("SSH_CHECK_LIST"))
             return False
             
     except subprocess.TimeoutExpired:
-        display_error("SSH_TIMEOUT")
+        display_error(get_text("SSH_TIMEOUT"))
         return False
     except Exception as e:
         error_msg = get_text("SSH_TEST_ERROR").format(e)
@@ -206,8 +218,8 @@ def select_bridge():
                     bridges.append(bridge_name)
 
         if not bridges:
-            display_error("NO_BRIDGE_FOUND")
-            display_recommendation("BRIDGE_CONFIG_ERROR")
+            display_error(get_text("NO_BRIDGE_FOUND"))
+            display_recommendation(get_text("BRIDGE_CONFIG_ERROR"))
             return None
 
         table = Table(title=f"[bold cyan]{get_text('BRIDGE_AVAILABLE')}[/bold cyan]", show_header=True)
@@ -220,7 +232,7 @@ def select_bridge():
             table.add_row(f"[{i}]", bridge, desc)
 
         console.print(table)
-        display_recommendation("REC_BRIDGE_DEFAULT")
+        display_recommendation(get_text("REC_BRIDGE_DEFAULT"))
         
         choice = Prompt.ask(get_text("CHOOSE_BRIDGE"), choices=[str(i) for i in range(1, len(bridges) + 1)])
         selected = bridges[int(choice) - 1]
@@ -230,7 +242,7 @@ def select_bridge():
         return select_bridge()
 
     except subprocess.CalledProcessError:
-        display_error("BRIDGE_LIST_ERROR")
+        display_error(get_text("BRIDGE_LIST_ERROR"))
         return None
 
 def select_storage():
@@ -255,8 +267,8 @@ def select_storage():
                     })
 
         if not storages:
-            display_error("NO_STORAGE_FOUND")
-            display_recommendation("STORAGE_CHECK_ACTIVE")
+            display_error(get_text("NO_STORAGE_FOUND"))
+            display_recommendation(get_text("STORAGE_CHECK_ACTIVE"))
             return None, None
 
         table = Table(title=f"[bold cyan]{get_text('STORAGE_AVAILABLE')}[/bold cyan]", show_header=True)
@@ -269,7 +281,7 @@ def select_storage():
             table.add_row(f"[{i}]", info['name'], info['type'], info['avail'])
 
         console.print(table)
-        display_recommendation("STORAGE_CHECK_ACTIVE")
+        display_recommendation(get_text("STORAGE_CHECK_ACTIVE"))
         
         choice = Prompt.ask(get_text("CHOOSE_STORAGE"), choices=[str(i) for i in range(1, len(storages) + 1)])
         selected = storages[int(choice) - 1]
@@ -283,7 +295,7 @@ def select_storage():
         return select_storage()
 
     except subprocess.CalledProcessError:
-        display_error("STORAGE_STATUS_ERROR")
+        display_error(get_text("STORAGE_STATUS_ERROR"))
         return None, None
 
 def detect_disk_usage(target, port, password):
@@ -351,7 +363,7 @@ def format_size_gb(mb):
 def check_storage_space_mb(storage_info, required_mb):
     """Verifica se há espaço suficiente no storage"""
     if not storage_info:
-        return False, "Storage info não disponível"
+        return False, get_text("STORAGE_INFO_UNAVAILABLE")
     
     # Converte espaço disponível para MB
     avail_str = storage_info['avail'].upper()
@@ -365,12 +377,12 @@ def check_storage_space_mb(storage_info, required_mb):
         try:
             avail_mb = int(float(avail_str)) // 1024  # assumindo bytes
         except:
-            return False, "Formato de storage inválido"
+            return False, get_text("INVALID_STORAGE_FORMAT")
     
     if required_mb > avail_mb:
-        return False, f"Storage tem apenas {avail_mb//1024}G disponível, mas precisa de {required_mb//1024}G"
+        return False, get_text("NOT_ENOUGH_STORAGE").format(avail_mb//1024, required_mb//1024)
     
-    return True, f"Storage tem {avail_mb//1024}G disponível, suficiente para {required_mb//1024}G"
+    return True, get_text("ENOUGH_STORAGE").format(avail_mb//1024, required_mb//1024)
 
 def configure_disk_size(target, port, password, storage_info):
     """Configura tamanho do disco com detecção automática"""
@@ -387,13 +399,13 @@ def configure_disk_size(target, port, password, storage_info):
         table.add_column("Descrição", style="white", width=40)
         table.add_column("Tamanho", style="green")
         
-        table.add_row("[1]", "Usar tamanho recomendado (baseado no uso atual + margem)", f"{recommended_gb}G")
-        table.add_row("[2]", "Tamanho personalizado", "Definir manualmente")
+        table.add_row("[1]", get_text("USE_RECOMMENDED_SIZE"), f"{recommended_gb}G")
+        table.add_row("[2]", get_text("CUSTOM_SIZE"), get_text("CUSTOM_SIZE_DESC"))
         
         console.print(table)
         console.print()
         
-        choice = Prompt.ask("Escolha uma opção", choices=["1", "2"], default="1")
+        choice = Prompt.ask(get_text("CHOOSE_DISK_SIZE_OPTION"), choices=["1", "2"], default="1")
         
         if choice == "1":
             # Verifica se o tamanho recomendado cabe no storage
@@ -404,12 +416,12 @@ def configure_disk_size(target, port, password, storage_info):
                 return format_size_gb(recommended_mb)
             else:
                 console.print(f"[red]❌ {space_msg}[/red]")
-                console.print(f"[yellow]Será necessário escolher um tamanho personalizado menor[/yellow]")
+                console.print(f"[yellow]{get_text('NEED_SMALLER_SIZE')}[/yellow]")
                 choice = "2"  # força personalizado
     
     if not recommended_mb or choice == "2":
         # Modo personalizado
-        console.print(f"\n[yellow]📝 Tamanho personalizado:[/yellow]")
+        console.print(f"\n[yellow]{get_text('CUSTOM_SIZE_PROMPT')}[/yellow]")
         
         if storage_info:
             avail_gb = storage_info['avail'].replace('G', '').replace('M', '')
@@ -417,24 +429,24 @@ def configure_disk_size(target, port, password, storage_info):
                 avail_display = storage_info['avail']
             else:
                 avail_display = f"{int(float(avail_gb))//1024}G"
-            console.print(f"[dim]💡 Espaço disponível no storage: {avail_display}[/dim]")
+            console.print(f"[dim]{get_text('AVAILABLE_STORAGE_SPACE')}: {avail_display}[/dim]")
         
-        console.print(f"[dim]💡 Formato: mb: 5120 (para 5GB) ou mb: 10240 (para 10GB)[/dim]")
-        console.print(f"[dim]💡 Você também pode digitar apenas: 5G, 10G, 2048M[/dim]")
+        console.print(f"[dim]{get_text('SIZE_FORMAT_TIP')}[/dim]")
+        console.print(f"[dim]{get_text('SIZE_FORMAT_EXAMPLES')}[/dim]")
         
         while True:
-            size_input = Prompt.ask("Digite o tamanho do disco")
+            size_input = Prompt.ask(get_text("ENTER_DISK_SIZE"))
             
             # Tenta parsear o input
             size_mb = parse_size_input(size_input)
             
             if size_mb is None:
-                console.print(f"[red]❌ Formato inválido![/red]")
-                console.print(f"[yellow]Use: mb: 5120 (5GB) ou 5G ou 5120M[/yellow]")
+                console.print(f"[red]{get_text('INVALID_SIZE_FORMAT')}[/red]")
+                console.print(f"[yellow]{get_text('USE_EXAMPLES')}[/yellow]")
                 continue
             
             if size_mb < 512:
-                console.print(f"[red]❌ Tamanho muito pequeno! Mínimo 512MB[/red]")
+                console.print(f"[red]{get_text('TOO_SMALL_SIZE')}[/red]")
                 continue
             
             # Verifica se cabe no storage
@@ -443,9 +455,9 @@ def configure_disk_size(target, port, password, storage_info):
                 
                 if not has_space:
                     console.print(f"[red]❌ {space_msg}[/red]")
-                    console.print(f"[yellow]💡 Escolha um tamanho menor ou outro storage[/yellow]")
+                    console.print(f"[yellow]{get_text('TRY_SMALLER_SIZE_OR_OTHER_STORAGE')}[/yellow]")
                     
-                    if not Confirm.ask("Tentar outro tamanho?", default=True):
+                    if not Confirm.ask(get_text("TRY_ANOTHER_SIZE"), default=True):
                         return None
                     continue
                 else:
@@ -453,10 +465,10 @@ def configure_disk_size(target, port, password, storage_info):
             
             # Confirmação
             size_gb = size_mb // 1024
-            console.print(f"\n[cyan]📋 Tamanho selecionado:[/cyan]")
+            console.print(f"\n[cyan]{get_text('SELECTED_SIZE')}[/cyan]")
             console.print(f"   💿 {size_mb} MB ({size_gb} GB)")
             
-            if Confirm.ask("Confirmar este tamanho?"):
+            if Confirm.ask(get_text("CONFIRM_SIZE")):
                 return format_size_gb(size_mb)
     
     return None
@@ -484,27 +496,27 @@ def select_ip_config():
     
     # IP estático
     console.print(f"\n[yellow]{get_text('STATIC_IP_CONFIG')}[/yellow]")
-    display_recommendation("IP_FORMAT_REC")
+    display_recommendation(get_text("IP_FORMAT_REC"))
     
     while True:
         ip = Prompt.ask(get_text("ENTER_CONTAINER_IP"))
         if validate_ip(ip):
             break
         else:
-            display_error("INVALID_IP")
+            display_error(get_text("INVALID_IP"))
     
-    display_recommendation("GATEWAY_FORMAT_REC")
+    display_recommendation(get_text("GATEWAY_FORMAT_REC"))
     
     while True:
         gateway = Prompt.ask(get_text("ENTER_GATEWAY"))
         if validate_ip(gateway):
             break
         else:
-            display_error("INVALID_GATEWAY")
+            display_error(get_text("INVALID_GATEWAY"))
     
     console.print(f"\n[green]{get_text('NETWORK_CONFIG_SUMMARY')}[/green]")
-    console.print(f"[cyan]IP:[/cyan] {ip}/24")
-    console.print(f"[cyan]Gateway:[/cyan] {gateway}")
+    console.print(f"[cyan]{get_text('IP')}:[/cyan] {ip}/24")
+    console.print(f"[cyan]{get_text('GATEWAY')}:[/cyan] {gateway}")
     
     if Confirm.ask(get_text("CONFIRM_NETWORK_CONFIG")):
         return ip, gateway
@@ -520,7 +532,7 @@ def collect_user_data():
     
     # ID do Container
     console.print(f"[cyan]{get_text('CONTAINER_ID')}[/cyan]")
-    display_recommendation("CONTAINER_ID_REC")
+    display_recommendation(get_text("CONTAINER_ID_REC"))
     
     while True:
         ct_id = Prompt.ask(get_text("CONTAINER_ID_PROMPT"), default="101")
@@ -538,12 +550,12 @@ def collect_user_data():
             data["id"] = ct_id
             break
         else:
-            display_error("INVALID_ID")
+            display_error(get_text("INVALID_ID"))
 
     # Nome do Container
     container_name_title = get_text("CONTAINER_NAME").format(data['id'])
     console.print(f"\n[cyan]{container_name_title}[/cyan]")
-    display_recommendation("CONTAINER_NAME_REC")
+    display_recommendation(get_text("CONTAINER_NAME_REC"))
     
     while True:
         name = Prompt.ask(get_text("CONTAINER_NAME_PROMPT"))
@@ -551,11 +563,11 @@ def collect_user_data():
             data["name"] = name
             break
         else:
-            display_error("NAME_TOO_SHORT")
+            display_error(get_text("NAME_TOO_SHORT"))
 
     # Host de origem
     console.print(f"\n[cyan]{get_text('SOURCE_SERVER')}[/cyan]")
-    display_recommendation("SOURCE_SERVER_REC")
+    display_recommendation(get_text("SOURCE_SERVER_REC"))
     
     while True:
         target = Prompt.ask(get_text("SOURCE_HOST_PROMPT"))
@@ -563,7 +575,7 @@ def collect_user_data():
             data["target"] = target
             break
         else:
-            display_error("INVALID_HOSTNAME")
+            display_error(get_text("INVALID_HOSTNAME"))
 
     # Porta SSH
     ssh_port_title = get_text("SSH_PORT").format(data['target'])
@@ -575,11 +587,11 @@ def collect_user_data():
             data["port"] = port
             break
         else:
-            display_error("INVALID_PORT")
+            display_error(get_text("INVALID_PORT"))
 
     # Senha SSH
     console.print(f"\n[cyan]{get_text('SSH_CREDENTIALS')}[/cyan]")
-    display_warning("SSH_PASSWORD_WARNING")
+    display_warning(get_text("SSH_PASSWORD_WARNING"))
     
     while True:
         password = Prompt.ask(get_text("SSH_PASSWORD_PROMPT"), password=True)
@@ -591,7 +603,7 @@ def collect_user_data():
                 if not Confirm.ask(get_text("TRY_ANOTHER_PASSWORD")):
                     return None
         else:
-            display_error("PASSWORD_CANNOT_EMPTY")
+            display_error(get_text("PASSWORD_CANNOT_EMPTY"))
 
     # Bridge de rede
     console.print(f"\n[cyan]{get_text('NETWORK_CONFIG')}[/cyan]")
@@ -620,7 +632,7 @@ def collect_user_data():
 
     # Memória
     console.print(f"\n[cyan]{get_text('MEMORY_CONFIG')}[/cyan]")
-    display_recommendation("MEMORY_REC")
+    display_recommendation(get_text("MEMORY_REC"))
     
     while True:
         try:
@@ -629,14 +641,14 @@ def collect_user_data():
                 data["memory"] = str(memory)
                 break
             else:
-                display_error("MEMORY_TOO_LOW")
+                display_error(get_text("MEMORY_TOO_LOW"))
         except ValueError:
-            display_error("NUMBERS_ONLY")
+            display_error(get_text("NUMBERS_ONLY"))
 
     # Senha do container
     console.print(f"\n[cyan]{get_text('CONTAINER_PASSWORD')}[/cyan]")
-    display_warning("CONTAINER_PASSWORD_WARNING")
-    display_recommendation("CONTAINER_PASSWORD_REC")
+    display_warning(get_text("CONTAINER_PASSWORD_WARNING"))
+    display_recommendation(get_text("CONTAINER_PASSWORD_REC"))
     
     while True:
         password = Prompt.ask(get_text("CONTAINER_PASSWORD_PROMPT"), password=True)
@@ -646,9 +658,9 @@ def collect_user_data():
                 data["passwordCT"] = password
                 break
             else:
-                display_error("PASSWORDS_DONT_MATCH")
+                display_error(get_text("PASSWORDS_DONT_MATCH"))
         else:
-            display_error("PASSWORD_TOO_SHORT")
+            display_error(get_text("PASSWORD_TOO_SHORT"))
 
     return data
 
@@ -671,14 +683,14 @@ def confirm_migration(data):
         table.add_row(get_text("DETAIL_IP_STATIC"), f"[bright_green]{data['ip']}/24[/bright_green]")
         table.add_row(get_text("DETAIL_GATEWAY"), f"[bright_green]{data['gateway']}[/bright_green]")
     
-    table.add_row(get_text("DETAIL_DISK"), f"[bright_yellow]{data['rootsize']}[/bright_yellow] em [dim]{data['storage']}[/dim]")
-    table.add_row(get_text("DETAIL_MEMORY"), f"[bright_yellow]{data['memory']} MB[/bright_yellow]")
+    table.add_row(get_text("DETAIL_DISK"), f"[bright_yellow]{data['rootsize']}[/bright_yellow] {get_text('IN')}[dim]{data['storage']}[/dim]")
+    table.add_row(get_text("DETAIL_MEMORY"), f"[bright_yellow]{data['memory']} {get_text('MB')}[/bright_yellow]")
     
     console.print(table)
     console.print()
     
-    display_warning("MIGRATION_WARNING")
-    display_recommendation("MIGRATION_CHECKLIST")
+    display_warning(get_text("MIGRATION_WARNING"))
+    display_recommendation(get_text("MIGRATION_CHECKLIST"))
     
     return Confirm.ask(get_text("CONFIRM_MIGRATION"), default=False)
 
@@ -700,12 +712,13 @@ def monitor_ssh_connection(target, port, password):
 
 def execute_migration_with_enhanced_feedback(data):
     """Executa a migração com feedback muito melhorado e robusto"""
-    console.print(f"\n[cyan]📦 {get_text('MIGRATION_STARTING')}[/cyan]")
+    logger.info(f"Iniciando migração para container {data['id']} ({data['name']})")
+    console.print(f"\n[cyan]{get_text('MIGRATION_STARTING')}[/cyan]")
     
     script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrate_container.sh")
     
     if not os.path.exists(script_path):
-        console.print(f"[red]❌ Script não encontrado: {script_path}[/red]")
+        console.print(f"[red]{get_text('SCRIPT_NOT_FOUND')}: {script_path}[/red]")
         return False
     
     shell_command = [
@@ -724,8 +737,18 @@ def execute_migration_with_enhanced_feedback(data):
         "-w", data["passwordSSH"]
     ]
     
+    # Unificação dos logs: passa o caminho do log Python para o shell via LINCON_LOG
+    log_file = None
+    for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            log_file = handler.baseFilename
+            break
+    env = os.environ.copy()
+    if log_file:
+        env["LINCON_LOG"] = log_file
+    
     console.print("\n" + "="*70)
-    console.print(f"[bold green]🚀 INICIANDO MIGRAÇÃO - ID {data['id']} ({data['name']})[/bold green]")
+    console.print(f"[bold green]{get_text('MIGRATION_STARTING_BANNER')}[/bold green]")
     console.print("="*70)
     
     try:
@@ -736,7 +759,8 @@ def execute_migration_with_enhanced_feedback(data):
             stderr=subprocess.STDOUT,  # Redireciona stderr para stdout
             universal_newlines=True,
             bufsize=1,  # Line buffered
-            preexec_fn=os.setsid  # Cria new session para controle
+            preexec_fn=os.setsid,  # Cria new session para controle
+            env=env  # <-- passa o ambiente com LINCON_LOG
         )
         
         # Configurações de timeout e monitoramento
@@ -772,29 +796,29 @@ def execute_migration_with_enhanced_feedback(data):
                 
                 # Timeout geral
                 if elapsed_time > max_migration_time:
-                    console.print(f"\n[red]❌ Timeout: Migração excedeu {max_migration_time//60} minutos[/red]")
+                    console.print(f"\n[red]{get_text('MIGRATION_TIMEOUT')}[/red]")
                     process.terminate()
                     return False
                 
                 # Timeout sem output
                 if current_time - last_output_time > no_output_timeout:
-                    console.print(f"\n[yellow]⚠️  Sem resposta há {no_output_timeout//60} minutos[/yellow]")
+                    console.print(f"\n[yellow]{get_text('NO_OUTPUT_TIMEOUT')}[/yellow]")
                     
                     # Verifica se SSH ainda funciona
-                    console.print(f"[cyan]🔍 Verificando conectividade SSH...[/cyan]")
+                    console.print(f"[cyan]{get_text('CHECKING_SSH_CONNECTION')}[/cyan]")
                     if monitor_ssh_connection(data["target"], data["port"], data["passwordSSH"]):
-                        console.print(f"[green]✅ SSH ainda ativo - continuando...[/green]")
+                        console.print(f"[green]{get_text('SSH_ACTIVE_CONTINUE')}[/green]")
                         last_output_time = current_time  # Reset timeout
                         progress.update(task, description="🔄 Processo ativo, aguardando resposta...")
                     else:
-                        console.print(f"[red]❌ Conexão SSH perdida![/red]")
+                        console.print(f"[red]{get_text('SSH_CONNECTION_LOST')}[/red]")
                         process.terminate()
                         return False
                 
                 # Verifica SSH periodicamente
                 if current_time - last_ssh_check > ssh_check_interval:
                     if not monitor_ssh_connection(data["target"], data["port"], data["passwordSSH"]):
-                        console.print(f"\n[red]❌ Conexão SSH perdida durante migração![/red]")
+                        console.print(f"\n[red]{get_text('SSH_CONNECTION_LOST_DURING_MIGRATION')}[/red]")
                         process.terminate()
                         return False
                     last_ssh_check = current_time
@@ -815,7 +839,7 @@ def execute_migration_with_enhanced_feedback(data):
                                 if not collection_started:
                                     progress.update(task, description="📡 Coletando sistema de arquivos...")
                                     collection_started = True
-                                    console.print(f"[bold blue]📡 Coletando dados do servidor {data['target']}...[/bold blue]")
+                                    console.print(f"[bold blue]{get_text('COLLECTING_FILESYSTEM')}[/bold blue]")
                             elif "filesystem collected" in line.lower() or "collected successfully" in line.lower():
                                 if not collection_completed:
                                     progress.update(task, description="✅ Coleta concluída, criando container...")
@@ -842,7 +866,7 @@ def execute_migration_with_enhanced_feedback(data):
                                     console.print(f"[dim]{line}[/dim]")
                     
                 except Exception as e:
-                    console.print(f"[red]Erro lendo output: {e}[/red]")
+                    console.print(f"[red]{get_text('ERROR_READING_OUTPUT')}: {e}[/red]")
                     break
         
         # Aguarda finalização
@@ -851,30 +875,30 @@ def execute_migration_with_enhanced_feedback(data):
         console.print("="*70)
         
         if return_code == 0:
-            console.print(f"[bold green]🎉 {get_text('MIGRATION_COMPLETE')}[/bold green]")
+            console.print(f"[bold green]{get_text('MIGRATION_COMPLETE_BANNER')}[/bold green]")
             
             # Mostra informações finais do container
-            console.print(f"\n[cyan]📋 {get_text('CONTAINER_INFO_ID')}[/cyan] {data['id']}")
-            console.print(f"[cyan]🏷️  {get_text('CONTAINER_INFO_NAME')}[/cyan] {data['name']}")
-            console.print(f"[cyan]🌐 {get_text('CONTAINER_INFO_IP')}[/cyan] {data['ip']}")
-            console.print(f"[cyan]🧠 {get_text('CONTAINER_INFO_MEMORY')}[/cyan] {data['memory']}MB")
-            console.print(f"[cyan]💿 {get_text('CONTAINER_INFO_DISK')}[/cyan] {data['rootsize']}")
+            console.print(f"\n[cyan]{get_text('CONTAINER_INFO_ID')}[/cyan] {data['id']}")
+            console.print(f"[cyan]{get_text('CONTAINER_INFO_NAME')}[/cyan] {data['name']}")
+            console.print(f"[cyan]{get_text('CONTAINER_INFO_IP')}[/cyan] {data['ip']}")
+            console.print(f"[cyan]{get_text('CONTAINER_INFO_MEMORY')}[/cyan] {data['memory']}{get_text('MB')}")
+            console.print(f"[cyan]{get_text('CONTAINER_INFO_DISK')}[/cyan] {data['rootsize']}")
             
-            console.print(f"\n[yellow]💡 {get_text('USEFUL_COMMANDS')}[/yellow]")
-            console.print(f"[white]   pct enter {data['id']}    [dim]# Entrar no container[/dim][/white]")
-            console.print(f"[white]   pct stop {data['id']}     [dim]# Parar container[/dim][/white]")
-            console.print(f"[white]   pct start {data['id']}    [dim]# Iniciar container[/dim][/white]")
-            console.print(f"[white]   pct status {data['id']}   [dim]# Status do container[/dim][/white]")
+            console.print(f"\n[yellow]{get_text('USEFUL_COMMANDS')}[/yellow]")
+            console.print(f"[white]   {get_text('PCT_ENTER')} {data['id']}    [dim]{get_text('ENTER_CONTAINER')}[/dim][/white]")
+            console.print(f"[white]   {get_text('PCT_STOP')} {data['id']}     [dim]{get_text('STOP_CONTAINER')}[/dim][/white]")
+            console.print(f"[white]   {get_text('PCT_START')} {data['id']}    [dim]{get_text('START_CONTAINER')}[/dim][/white]")
+            console.print(f"[white]   {get_text('PCT_STATUS')} {data['id']}   [dim]{get_text('CONTAINER_STATUS')}[/dim][/white]")
             
             return True
         else:
-            console.print(f"[red]❌ Falha na migração (código: {return_code})[/red]")
+            console.print(f"[red]{get_text('MIGRATION_FAILED')}: {get_text('MIGRATION_CODE')}: {return_code}[/red]")
             
             # Tenta capturar erros restantes
             try:
                 remaining_output = process.stdout.read() if process.stdout else ""
                 if remaining_output:
-                    console.print(f"[red]Output final:[/red]")
+                    console.print(f"[red]{get_text('FINAL_OUTPUT')}:[/red]")
                     for line in remaining_output.split('\n'):
                         if line.strip():
                             console.print(f"[red]  {line}[/red]")
@@ -884,7 +908,7 @@ def execute_migration_with_enhanced_feedback(data):
             return False
             
     except subprocess.TimeoutExpired:
-        console.print(f"\n[red]❌ Timeout na migração[/red]")
+        console.print(f"\n[red]{get_text('MIGRATION_TIMEOUT_ERROR')}[/red]")
         try:
             process.terminate()
             time.sleep(2)
@@ -894,41 +918,117 @@ def execute_migration_with_enhanced_feedback(data):
             pass
         return False
     except KeyboardInterrupt:
-        console.print(f"\n[yellow]⚠️  Migração cancelada pelo usuário[/yellow]")
+        console.print(f"\n[yellow]{get_text('MIGRATION_CANCELLED_USER')}[/yellow]")
         try:
             process.terminate()
         except:
             pass
         return False
     except Exception as e:
-        console.print(f"\n[red]❌ Erro inesperado: {e}[/red]")
+        console.print(f"\n[red]{get_text('UNEXPECTED_ERROR')}: {e}[/red]")
         try:
             process.terminate()
         except:
             pass
         return False
 
+def check_incomplete_migrations():
+    """Verifica se existem migrações incompletas e permite continuar"""
+    state_manager = MigrationState()
+    incomplete = state_manager.get_incomplete_migrations()
+    
+    if not incomplete:
+        return MigrationState(), None
+        
+    console.print(f"\n[bold yellow]{get_text('INCOMPLETE_MIGRATIONS')}[/bold yellow]")
+    
+    # Mostra as migrações incompletas com interface moderna
+    table = Table(title=f"[bold yellow]{get_text('PENDING_MIGRATIONS')}[/bold yellow]",
+                 show_header=True, header_style="bold bright_white",
+                 border_style="yellow", show_edge=False)
+    table.add_column(get_text("MIGRATION_ID"), justify="right", style="bright_cyan", width=12)
+    table.add_column(get_text("MIGRATION_DATE"), style="bright_magenta", width=16)
+    table.add_column(get_text("MIGRATION_CONTAINER"), style="bright_green", width=15)
+    table.add_column(get_text("MIGRATION_STATUS"), style="bright_yellow")
+    
+    for m in incomplete:
+        date = datetime.fromisoformat(m['timestamp']).strftime('%d/%m/%Y %H:%M')
+        # Verifica se data existe e não é None
+        data = m.get('data', {})
+        container = data.get('name', get_text('UNKNOWN_CONTAINER')) if data else get_text('UNKNOWN_CONTAINER')
+        table.add_row(
+            m['migration_id'],
+            date,
+            container,
+            m['step']
+        )
+    
+    console.print()
+    console.print(table)
+    console.print()
+    
+    if Confirm.ask(get_text("CONTINUE_PREVIOUS")):
+        choices = [m['migration_id'] for m in incomplete] + ["0"]
+        choice = Prompt.ask(
+            get_text("MIGRATION_ID_PROMPT"),
+            choices=choices
+        )
+        
+        if choice != "0":
+            selected = next(m for m in incomplete if m['migration_id'] == choice)
+            return MigrationState(choice), selected
+    
+    return MigrationState(), None
+
 def migrate_lxc():
-    """Função principal de migração com interface otimizada"""
+    """Função principal de migração"""
     def handle_interrupt(signum, frame):
-        console.print(f"\n[yellow]⚠️  {get_text('MIGRATION_CANCELLED_USER')}[/yellow]")
+        if 'state_manager' in locals() and state_manager is not None and 'data' in locals():
+            state_manager.save_state(data, "interrupted")
+        console.print(f"\n[red]{get_text('MIGRATION_CANCELLED_USER')}[/red]")
         exit(1)
     
     signal.signal(signal.SIGINT, handle_interrupt)
-    
+
+    # 1. Verifica migrações incompletas
+    state_manager, previous_state = check_incomplete_migrations()
+
     if not check_dependencies():
         return False
-    
-    data = collect_user_data()
-    if not data:
-        console.print(f"\n[yellow]❌ {get_text('MIGRATION_CANCELLED_INPUT')}[/yellow]")
+
+    # 2. Se existe estado anterior, retoma
+    if previous_state:
+        data = previous_state['data']
+        continue_msg = get_text("CONTINUING_MIGRATION").format(previous_state['migration_id'], previous_state['step'])
+        console.print(f"[yellow]{continue_msg}[/yellow]")
+    else:
+        data = collect_user_data()
+        if not data:
+            console.print(f"\n[yellow]{get_text('MIGRATION_CANCELLED_INPUT')}[/yellow]")
+            return False
+        state_manager.save_state(data, "input_collected")
+
+    # 3. Validação dos dados
+    # (adicione uma função validate_parameters se quiser)
+    state_manager.save_state(data, "validated")
+
+    # 4. Confirmação
+    if not previous_state or previous_state['step'] not in ['converting', 'validated']:
+        if not confirm_migration(data):
+            console.print(f"\n[yellow]{get_text('MIGRATION_CANCELLED_INPUT')}[/yellow]")
+            state_manager.save_state(data, "cancelled")
+            return False
+
+    state_manager.save_state(data, "converting")
+
+    # 5. Executa migração
+    if execute_migration_with_enhanced_feedback(data):
+        state_manager.save_state(data, "completed")
+        state_manager.clear_state()
+        return True
+    else:
+        state_manager.save_state(data, "failed")
         return False
-    
-    if not confirm_migration(data):
-        console.print(f"\n[yellow]❌ {get_text('MIGRATION_CANCELLED_INPUT')}[/yellow]")
-        return False
-    
-    return execute_migration_with_enhanced_feedback(data)
 
 if __name__ == "__main__":
     migrate_lxc() 

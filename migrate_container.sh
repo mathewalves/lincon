@@ -97,17 +97,67 @@ collectFS() {
     .
 }
 
-echo "🚀 Iniciando o processo de migração..."
-echo "📡 Coletando sistema de arquivos de $target... Isso pode levar vários minutos."
+# Adicionar bloco de traduções no início do script
+# Detectar idioma
+LANG_CODE="${LINCON_LANG:-${LANG:0:2}}"
+if [ "$LANG_CODE" = "en" ]; then
+  MSG_START_MIGRATION="Starting container migration..."
+  MSG_COLLECT_FS="Collecting filesystem from"
+  MSG_FS_COLLECTED="Filesystem collected successfully."
+  MSG_CREATING_CT="Creating container"
+  MSG_CONTAINER_CREATED="Container created successfully!"
+  MSG_STARTING_CT="Starting container"
+  MSG_MIGRATION_COMPLETED="Migration process completed!"
+  MSG_CLEANING_UP="Cleaning up temporary files..."
+  MSG_ERROR_MISSING_PARAMS="Error: Missing required parameters."
+  MSG_ERROR_COLLECT_FS="❌ Failed to collect filesystem from target machine."
+  MSG_ERROR_CREATE_CT="❌ Failed to create container."
+  MSG_ERROR_TIMEOUT_CT="❌ Timeout: The container was not created in time. Check Proxmox task logs for details."
+  MSG_ERROR_AT="❌ Failed to schedule the container creation task with 'at'. Check if the 'atd' service is installed and running."
+  MSG_CONTAINER_STARTED="Container started successfully!"
+  MSG_CONTAINER_START_FAILED="⚠️  The container was created but failed to start. Try manually: pct start"
+else
+  MSG_START_MIGRATION="Iniciando o processo de migração..."
+  MSG_COLLECT_FS="Coletando sistema de arquivos de"
+  MSG_FS_COLLECTED="Sistema de arquivos coletado com sucesso."
+  MSG_CREATING_CT="Preparando para criar o container"
+  MSG_CONTAINER_CREATED="Contêiner criado com sucesso!"
+  MSG_STARTING_CT="Iniciando o contêiner"
+  MSG_MIGRATION_COMPLETED="Processo de migração finalizado!"
+  MSG_CLEANING_UP="Limpando arquivos temporários..."
+  MSG_ERROR_MISSING_PARAMS="❌ Erro: Faltando parâmetros obrigatórios."
+  MSG_ERROR_COLLECT_FS="❌ Falha ao coletar o sistema de arquivos da máquina de origem."
+  MSG_ERROR_CREATE_CT="❌ Falha ao criar o contêiner."
+  MSG_ERROR_TIMEOUT_CT="❌ Timeout: O contêiner não foi criado a tempo. Verifique os logs de tarefas no Proxmox para detalhes."
+  MSG_ERROR_AT="❌ Falha ao agendar a tarefa de criação do contêiner com 'at'. Verifique se o serviço 'atd' está instalado e em execução."
+  MSG_CONTAINER_STARTED="Contêiner iniciado com sucesso!"
+  MSG_CONTAINER_START_FAILED="⚠️  O contêiner foi criado mas falhou ao iniciar. Tente manualmente: pct start"
+fi
+
+# Função de log
+LOG_FILE="${LINCON_LOG:-/tmp/lincon_migrate_container.log}"
+log_msg() {
+  local msg="$1"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$LOG_FILE"
+}
+
+log_msg "$MSG_START_MIGRATION"
+echo "$MSG_START_MIGRATION"
+log_msg "$MSG_COLLECT_FS $target..."
+echo "$MSG_COLLECT_FS $target... Isso pode levar vários minutos."
 
 # Conecta via SSH na máquina de origem, executa a função de coleta e salva em um arquivo temporário
 if ! sshpass -p "$ssh_password" ssh -p "$port" -o "StrictHostKeyChecking=no" "root@$target" "$(typeset -f collectFS); collectFS" > "/tmp/$name.tar.gz"; then
-    echo "❌ Falha ao coletar o sistema de arquivos da máquina de origem."
+    log_msg "$MSG_ERROR_COLLECT_FS"
+    echo "$MSG_ERROR_COLLECT_FS"
     exit 1
 fi
 
-echo "✅ Sistema de arquivos coletado com sucesso."
-echo "📦 Preparando para criar o container $id ($name)..."
+log_msg "$MSG_FS_COLLECTED"
+echo "$MSG_FS_COLLECTED"
+
+log_msg "$MSG_CREATING_CT $id ($name)..."
+echo "$MSG_CREATING_CT $id ($name)..."
 
 # Detecta o tipo do storage para formatar o parâmetro rootfs corretamente
 storage_type=$(pvesm status | awk -v s="$storage" '$1==s {print $2}')
@@ -148,7 +198,8 @@ echo "🚀 Executando a criação do contêiner em uma sessão separada para evi
 
 # Executa o script de criação usando 'at' para garantir um ambiente de execução limpo
 if ! at -f "$CREATE_SCRIPT" now; then
-    echo "❌ Falha ao agendar a tarefa de criação do contêiner com 'at'. Verifique se o serviço 'atd' está instalado e em execução."
+    log_msg "$MSG_ERROR_AT"
+    echo "$MSG_ERROR_AT"
     rm -f "$CREATE_SCRIPT"
     rm -f "/tmp/$name.tar.gz"
     exit 1
@@ -162,7 +213,8 @@ while ! pct status "$id" &> /dev/null; do
     sleep 5
     COUNT=$((COUNT + 5))
     if [ "$COUNT" -ge "$TIMEOUT" ]; then
-        echo "❌ Timeout: O contêiner $id não foi criado em $TIMEOUT segundos. Verifique os logs de tarefas na interface web do Proxmox para detalhes."
+        log_msg "$MSG_ERROR_TIMEOUT_CT"
+        echo "$MSG_ERROR_TIMEOUT_CT"
         rm -f "$CREATE_SCRIPT"
         rm -f "/tmp/$name.tar.gz"
         exit 1
@@ -173,8 +225,9 @@ echo ""
 
 # Verifica se o contêiner realmente existe após o loop
 if pct status "$id" &> /dev/null; then
-    echo "✅ Contêiner criado com sucesso!"
-    echo "🚀 Iniciando o contêiner $id..."
+    log_msg "$MSG_CONTAINER_CREATED"
+    echo "$MSG_CONTAINER_CREATED"
+    echo "$MSG_STARTING_CT $id..."
 
     # --- INÍCIO DA CORREÇÃO ---
     # Cria um script temporário para o comando 'pct start'
@@ -185,7 +238,8 @@ if pct status "$id" &> /dev/null; then
 
     # Executa o start usando 'at' para evitar erros de TTY
     if ! at -f "$START_SCRIPT" now; then
-        echo "⚠️  Falha ao agendar a tarefa de inicialização. Tente manualmente: pct start $id"
+        log_msg "$MSG_CONTAINER_START_FAILED"
+        echo "$MSG_CONTAINER_START_FAILED"
     fi
     
     # Aguarda um pouco para o comando start ser executado
@@ -193,7 +247,8 @@ if pct status "$id" &> /dev/null; then
     
     # Verifica se o contêiner está rodando
     if pct status "$id" | grep -q "running"; then
-        echo "🎉 Migração concluída com sucesso!"
+        log_msg "$MSG_CONTAINER_STARTED"
+        echo "$MSG_CONTAINER_STARTED"
         echo "📋 Detalhes do Contêiner:"
         echo "   ID: $id"
         echo "   Nome: $name"
@@ -206,19 +261,23 @@ if pct status "$id" &> /dev/null; then
         echo "   pct stop $id     # Parar o contêiner"
         echo "   pct status $id   # Verificar o status"
     else
-        echo "⚠️  O contêiner foi criado mas falhou ao iniciar."
+        log_msg "$MSG_CONTAINER_START_FAILED"
+        echo "$MSG_CONTAINER_START_FAILED"
         echo "💡 Tente manualmente: pct start $id"
     fi
     # --- FIM DA CORREÇÃO ---
 else
-    echo "❌ Falha ao criar o contêiner após a execução separada. Verifique os logs de tarefas na interface web do Proxmox."
+    log_msg "$MSG_ERROR_CREATE_CT"
+    echo "$MSG_ERROR_CREATE_CT"
     exit 1
 fi
 
 # Remove os arquivos temporários
-echo "🧹 Limpando arquivos temporários..."
+echo "$MSG_CLEANING_UP"
+log_msg "$MSG_CLEANING_UP"
 rm -f "$CREATE_SCRIPT"
 rm -f "$START_SCRIPT" # Limpa o novo script de start
 rm -f "/tmp/$name.tar.gz"
 
-echo "✨ Processo de migração finalizado!"
+log_msg "$MSG_MIGRATION_COMPLETED"
+echo "$MSG_MIGRATION_COMPLETED"
