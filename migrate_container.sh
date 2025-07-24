@@ -64,7 +64,7 @@ do
 done
 
 # Valida se todos os parâmetros obrigatórios foram fornecidos
-if [ -z "$name" ] || [ -z "$target" ] || [ -z "$port" ] || [ -z "$id" ] || [ -z "$rootsize" ] || [ -z "$ip" ] || [ -z "$bridge" ] || [ -z "$memory" ] || [ -z "$storage" ] || [ -z "$password" ] || [ -z "$ssh_password" ]; then
+if [ -z "$name" ] || [ -z "$target" ] || [ -z "$port" ] || [ -z "$id" ] || [ -z "$rootsize" ] || [ -z "$ip" ] || [ -z "$memory" ] || [ -z "$storage" ] || [ -z "$password" ] || [ -z "$ssh_password" ]; then
     echo "❌ Erro: Faltando parâmetros obrigatórios."
     usage
     exit 1
@@ -156,7 +156,7 @@ fi
 
 # Aguarda a criação do contêiner verificando seu status periodicamente
 echo "⏳ Aguardando a criação do contêiner $id... (Isso pode levar vários minutos)"
-TIMEOUT=1800 # Aumentado para 30 minutos
+TIMEOUT=1800 # 30 minutos
 COUNT=0
 while ! pct status "$id" &> /dev/null; do
     sleep 5
@@ -176,7 +176,23 @@ if pct status "$id" &> /dev/null; then
     echo "✅ Contêiner criado com sucesso!"
     echo "🚀 Iniciando o contêiner $id..."
 
-    if pct start "$id"; then
+    # --- INÍCIO DA CORREÇÃO ---
+    # Cria um script temporário para o comando 'pct start'
+    START_SCRIPT="/tmp/start_ct_${id}.sh"
+    echo "#!/bin/bash" > "$START_SCRIPT"
+    echo "pct start $id" >> "$START_SCRIPT"
+    chmod +x "$START_SCRIPT"
+
+    # Executa o start usando 'at' para evitar erros de TTY
+    if ! at -f "$START_SCRIPT" now; then
+        echo "⚠️  Falha ao agendar a tarefa de inicialização. Tente manualmente: pct start $id"
+    fi
+    
+    # Aguarda um pouco para o comando start ser executado
+    sleep 5 
+    
+    # Verifica se o contêiner está rodando
+    if pct status "$id" | grep -q "running"; then
         echo "🎉 Migração concluída com sucesso!"
         echo "📋 Detalhes do Contêiner:"
         echo "   ID: $id"
@@ -193,6 +209,7 @@ if pct status "$id" &> /dev/null; then
         echo "⚠️  O contêiner foi criado mas falhou ao iniciar."
         echo "💡 Tente manualmente: pct start $id"
     fi
+    # --- FIM DA CORREÇÃO ---
 else
     echo "❌ Falha ao criar o contêiner após a execução separada. Verifique os logs de tarefas na interface web do Proxmox."
     exit 1
@@ -201,6 +218,7 @@ fi
 # Remove os arquivos temporários
 echo "🧹 Limpando arquivos temporários..."
 rm -f "$CREATE_SCRIPT"
+rm -f "$START_SCRIPT" # Limpa o novo script de start
 rm -f "/tmp/$name.tar.gz"
 
 echo "✨ Processo de migração finalizado!"
