@@ -75,6 +75,15 @@ translations = {
         "MSG_DOCKER_CONTAINER_STARTED": "Container Docker iniciado com sucesso",
         "MSG_DOCKER_CONTAINER_FAILED": "Falha ao iniciar container Docker",
         
+        # Base image selection
+        "BASE_IMAGE_SELECTION": "Seleção de Imagem Base",
+        "AVAILABLE_BASE_IMAGES": "Imagens Base Disponíveis",
+        "RECOMMENDED_IMAGE_MESSAGE": "Recomendamos usar a imagem {0} para melhor compatibilidade",
+        "SELECT_BASE_IMAGE_PROMPT": "Escolha a imagem base (ou 'r' para usar a recomendada)",
+        "ENTER_CUSTOM_IMAGE": "Digite a imagem personalizada (formato: nome:tag)",
+        "INVALID_CUSTOM_IMAGE": "Formato de imagem inválido. Use: nome:tag",
+        "INVALID_IMAGE_CHOICE": "Escolha inválida. Tente novamente.",
+        
         # opções
         "OPTION_DHCP": "DHCP (automático)",
         "OPTION_MANUAL": "Manual (IP fixo)",
@@ -519,7 +528,130 @@ translations = {
         
         # Container restore
         "CONTAINER_RESTORE_FAILED": "Falha ao restaurar container: {}",
-        "CONTAINER_RESTORE_REC": "Verifique:\n• Espaço disponível no storage\n• ID do container não existe\n• Permissões do Proxmox\n• Arquivo de backup válido"
+        "CONTAINER_RESTORE_REC": "Verifique:\n• Espaço disponível no storage\n• ID do container não existe\n• Permissões do Proxmox\n• Arquivo de backup válido",
+        
+        # Docker specific translations
+        "DOCKER_CONTAINER_NAME": "📦 Nome do Container",
+        "DOCKER_CONTAINER_NAME_DESC": "Escolha um nome descritivo para seu container Docker",
+        "DOCKER_CONTAINER_NAME_ERROR": "Nome do container deve ter pelo menos 3 caracteres",
+        "SOURCE_SERVER_DESC": "Digite o endereço IP ou hostname do servidor Linux para migrar",
+        "SOURCE_SERVER_ERROR": "Servidor origem não pode estar vazio",
+        "SSH_PORT_ERROR": "Porta deve estar entre 1 e 65535",
+        "SSH_PORT_ERROR_DIGIT": "Porta deve ser um número",
+        "SSH_PASSWORD_EMPTY": "Senha SSH não pode estar vazia",
+        
+        # Docker network configuration
+        "NETWORK_OPTION": "Opção",
+        "NETWORK_TYPE": "Tipo",
+        "NETWORK_DESCRIPTION": "Descrição",
+        "NETWORK_OPTION_1": "[1]",
+        "NETWORK_TYPE_1": "bridge",
+        "NETWORK_DESCRIPTION_1": "Rede bridge padrão (isolada)",
+        "NETWORK_OPTION_2": "[2]",
+        "NETWORK_TYPE_2": "host",
+        "NETWORK_DESCRIPTION_2": "Rede do host (sem isolamento)",
+        "NETWORK_OPTION_3": "[3]",
+        "NETWORK_TYPE_3": "custom",
+        "NETWORK_DESCRIPTION_3": "Nome da rede customizada",
+        "CHOOSE_NETWORK_TYPE": "Escolha o tipo de rede",
+        "CUSTOM_NETWORK_NAME": "Digite o nome da rede customizada",
+        
+        # Docker port mapping
+        "PORT_MAPPING": "🔗 Mapeamento de Portas",
+        "PORT_MAPPING_FORMAT": "Formato: porta_host:porta_container (ex: 8080:80, 22:22)",
+        "PORT_MAPPING_PROMPT": "Mapeamentos de porta (separados por vírgula)",
+        
+        # Docker volumes
+        "EXTRA_VOLUMES": "💾 Volumes Extras",
+        "EXTRA_VOLUMES_FORMAT": "Formato: caminho_host:caminho_container (ex: /data:/app/data)",
+        "EXTRA_VOLUMES_PROMPT": "Volumes extras (separados por vírgula)",
+        
+        # Docker migration process
+        "MSG_CREATING_DOCKER_IMAGE": "Criando imagem Docker...",
+        "COLLECTING_DATA": "Coletando dados do servidor origem",
+        "BUILDING_DOCKER_IMAGE": "Construindo imagem Docker",
+        "BUILDING_IMAGE": "Construindo imagem Docker",
+        "SYSTEM_COLLECTED": "Sistema coletado com sucesso",
+        "DOCKER_IMAGE_BUILD_FAILED": "Falha ao construir imagem Docker",
+        "MSG_DOCKER_IMAGE_CREATED": "Imagem Docker criada com sucesso",
+        "STARTING_DOCKER_CONTAINER": "Iniciando container Docker",
+        "MSG_DOCKER_CONTAINER_STARTED": "Container Docker iniciado com sucesso",
+        "DOCKER_CONTAINER_START_FAILED": "Falha ao iniciar container Docker",
+        
+        # Docker migration confirmation
+        "DOCKER_MIGRATION_CONFIRMATION_TITLE": "🐳 Confirmação da Migração Docker",
+        "DOCKER_MIGRATION_DETAILS_TITLE": "Detalhes da Migração Docker",
+        "DOCKER_MIGRATION_ITEM": "Item",
+        "DOCKER_MIGRATION_VALUE": "Valor",
+        "DOCKER_MIGRATION_CONTAINER_NAME": "📦 Nome do Container",
+        "DOCKER_MIGRATION_SOURCE_SERVER": "🖥️  Servidor Origem",
+        "DOCKER_MIGRATION_NETWORK": "🌐 Rede",
+        "DOCKER_MIGRATION_PORTS": "🔗 Portas",
+        "DOCKER_MIGRATION_VOLUMES": "💾 Volumes",
+        "DOCKER_MIGRATION_OPERATION_WARNING": "Esta operação irá:",
+        "DOCKER_MIGRATION_CONNECT_SOURCE": "Conectar ao servidor origem via SSH",
+        "DOCKER_MIGRATION_COLLECT_FS": "Coletar todo o sistema de arquivos",
+        "DOCKER_MIGRATION_CREATE_IMAGE": "Criar imagem Docker",
+        "DOCKER_MIGRATION_START_CONTAINER": "Iniciar container Docker",
+        "DOCKER_MIGRATION_CERTIFICATION_CHECK": "Certifique-se de que:",
+        "DOCKER_MIGRATION_DOCKER_INSTALLED": "Docker está instalado e rodando",
+        "DOCKER_MIGRATION_SOURCE_ACCESSIBLE": "Servidor origem está acessível via SSH",
+        "DOCKER_MIGRATION_ENOUGH_DISK": "Há espaço suficiente em disco",
+        "CONFIRM_DOCKER_MIGRATION": "Confirmar migração Docker?",
+        
+        # Docker migration results
+        "DOCKER_MIGRATION_COMPLETED": "🎉 Migração Docker Concluída!",
+        "DOCKER_IMAGE": "Imagem",
+        "DOCKER_NETWORK": "Rede",
+        "DOCKER_PORTS": "Portas",
+        "DOCKER_VOLUMES": "Volumes",
+        "DOCKER_USEFUL_COMMANDS": "💡 Comandos úteis:",
+        "DOCKER_EXEC_COMMAND": "docker exec -it",
+        "DOCKER_EXEC_DESC": "# Entrar no container",
+        "DOCKER_STOP_COMMAND": "docker stop",
+        "DOCKER_STOP_DESC": "# Parar container",
+        "DOCKER_START_COMMAND": "docker start",
+        "DOCKER_START_DESC": "# Iniciar container",
+        "DOCKER_LOGS_COMMAND": "docker logs",
+        "DOCKER_LOGS_DESC": "# Ver logs",
+        
+        # Migration completion banner
+        "MIGRATION_COMPLETE_BANNER": "🎉 Migração concluída!",
+        "PCT_ENTER": "pct enter",
+        "PCT_STOP": "pct stop",
+        "PCT_START": "pct start",
+        "PCT_STATUS": "pct status",
+        "ENTER_CONTAINER": "# Entrar no container",
+        "STOP_CONTAINER": "# Parar container",
+        "START_CONTAINER": "# Iniciar container",
+        "CONTAINER_STATUS": "# Status do container",
+        "MB": "MB",
+        "IN": "em",
+        
+        # Additional missing translations
+        "DOCKER_MIGRATION_CANCELLED_BY_USER": "Migração Docker cancelada pelo usuário",
+        "MIGRATION_CANCELLED_BY_USER": "Migração cancelada pelo usuário",
+        "UNEXPECTED_ERROR": "Erro inesperado",
+        "FILESYSTEM_COLLECTION_FAILED": "Falha na coleta do sistema de arquivos",
+        "SSH_CONNECTION_FAILED": "Falha na conexão SSH",
+        
+        # Docker specific missing translations
+        "DOCKER_DEP": "Docker",
+        "DOCKER_MIGRATION_TITLE": "🐳 LINCON - Migração Linux → Docker",
+        "DOCKER_MIGRATION_STARTING": "🔄 Iniciando processo de migração Docker...",
+        "DOCKER_CONTAINER_EXISTS": "Container '{}' já existe!",
+        "CHOOSE_ANOTHER_NAME": "Escolher outro nome?",
+        "NETWORK_OPTIONS": "Opções de Rede",
+        "MIGRATION_TIMEOUT": "Timeout da migração excedido",
+        "NO_OUTPUT_TIMEOUT": "Nenhuma saída recebida por muito tempo",
+        "CHECKING_SSH_CONNECTION": "Verificando conexão SSH...",
+        "SSH_ACTIVE_CONTINUE": "SSH está ativo, continuando...",
+        "SSH_CONNECTION_LOST": "Conexão SSH perdida",
+        "SSH_CONNECTION_LOST_DURING_MIGRATION": "Conexão SSH perdida durante a migração",
+        "ERROR_READING_OUTPUT": "Erro ao ler saída do processo",
+        "MIGRATION_FAILED": "Migração falhou",
+        "MIGRATION_CODE": "Código de saída",
+        "FINAL_OUTPUT": "Saída final"
     },
     "en": {
         # menu
@@ -596,6 +728,15 @@ translations = {
         "MSG_STARTING_DOCKER_CONTAINER": "Starting Docker container...",
         "MSG_DOCKER_CONTAINER_STARTED": "Docker container started successfully",
         "MSG_DOCKER_CONTAINER_FAILED": "Failed to start Docker container",
+        
+        # Base image selection
+        "BASE_IMAGE_SELECTION": "Base Image Selection",
+        "AVAILABLE_BASE_IMAGES": "Available Base Images",
+        "RECOMMENDED_IMAGE_MESSAGE": "We recommend using image {0} for better compatibility",
+        "SELECT_BASE_IMAGE_PROMPT": "Choose the base image (or 'r' to use recommended)",
+        "ENTER_CUSTOM_IMAGE": "Enter custom image (format: name:tag)",
+        "INVALID_CUSTOM_IMAGE": "Invalid image format. Use: name:tag",
+        "INVALID_IMAGE_CHOICE": "Invalid choice. Try again.",
         
         # options
         "OPTION_DHCP": "DHCP (automatic)",
@@ -1041,6 +1182,130 @@ translations = {
         
         # Container restore
         "CONTAINER_RESTORE_FAILED": "Failed to restore container: {}",
-        "CONTAINER_RESTORE_REC": "Check:\n• Available space in storage\n• Container ID doesn't exist\n• Proxmox permissions\n• Valid backup file"
+        "CONTAINER_RESTORE_REC": "Check:\n• Available space in storage\n• Container ID doesn't exist\n• Proxmox permissions\n• Valid backup file",
+        
+        # Docker specific translations
+        "DOCKER_CONTAINER_NAME": "📦 Container Name",
+        "DOCKER_CONTAINER_NAME_DESC": "Choose a descriptive name for your Docker container",
+        "DOCKER_CONTAINER_NAME_ERROR": "Container name must have at least 3 characters",
+        "SOURCE_SERVER_DESC": "Enter the IP address or hostname of the Linux server to migrate",
+        "SOURCE_SERVER_ERROR": "Source server cannot be empty",
+        "SSH_PORT_ERROR": "Port must be between 1 and 65535",
+        "SSH_PORT_ERROR_DIGIT": "Port must be a number",
+        "SSH_PASSWORD_EMPTY": "SSH password cannot be empty",
+        
+        # Docker network configuration
+        "NETWORK_OPTION": "Option",
+        "NETWORK_TYPE": "Type",
+        "NETWORK_DESCRIPTION": "Description",
+        "NETWORK_OPTION_1": "[1]",
+        "NETWORK_TYPE_1": "bridge",
+        "NETWORK_DESCRIPTION_1": "Default bridge network (isolated)",
+        "NETWORK_OPTION_2": "[2]",
+        "NETWORK_TYPE_2": "host",
+        "NETWORK_DESCRIPTION_2": "Host network (no isolation)",
+        "NETWORK_OPTION_3": "[3]",
+        "NETWORK_TYPE_3": "custom",
+        "NETWORK_DESCRIPTION_3": "Custom network name",
+        "CHOOSE_NETWORK_TYPE": "Choose network type",
+        "CUSTOM_NETWORK_NAME": "Enter custom network name",
+        
+        # Docker port mapping
+        "PORT_MAPPING": "🔗 Port Mapping",
+        "PORT_MAPPING_FORMAT": "Format: host_port:container_port (ex: 8080:80, 22:22)",
+        "PORT_MAPPING_PROMPT": "Port mappings (comma separated)",
+        
+        # Docker volumes
+        "EXTRA_VOLUMES": "💾 Extra Volumes",
+        "EXTRA_VOLUMES_FORMAT": "Format: host_path:container_path (ex: /data:/app/data)",
+        "EXTRA_VOLUMES_PROMPT": "Extra volumes (comma separated)",
+        
+        # Docker migration process
+        "MSG_CREATING_DOCKER_IMAGE": "Creating Docker image...",
+        "COLLECTING_DATA": "Collecting data from source server",
+        "BUILDING_DOCKER_IMAGE": "Building Docker image",
+        "BUILDING_IMAGE": "Building Docker image",
+        "SYSTEM_COLLECTED": "System collected successfully",
+        "DOCKER_IMAGE_BUILD_FAILED": "Failed to build Docker image",
+        "MSG_DOCKER_IMAGE_CREATED": "Docker image created successfully",
+        "STARTING_DOCKER_CONTAINER": "Starting Docker container",
+        "MSG_DOCKER_CONTAINER_STARTED": "Docker container started successfully",
+        "DOCKER_CONTAINER_START_FAILED": "Failed to start Docker container",
+        
+        # Docker migration confirmation
+        "DOCKER_MIGRATION_CONFIRMATION_TITLE": "🐳 Docker Migration Confirmation",
+        "DOCKER_MIGRATION_DETAILS_TITLE": "Docker Migration Details",
+        "DOCKER_MIGRATION_ITEM": "Item",
+        "DOCKER_MIGRATION_VALUE": "Value",
+        "DOCKER_MIGRATION_CONTAINER_NAME": "📦 Container Name",
+        "DOCKER_MIGRATION_SOURCE_SERVER": "🖥️  Source Server",
+        "DOCKER_MIGRATION_NETWORK": "🌐 Network",
+        "DOCKER_MIGRATION_PORTS": "🔗 Ports",
+        "DOCKER_MIGRATION_VOLUMES": "💾 Volumes",
+        "DOCKER_MIGRATION_OPERATION_WARNING": "This operation will:",
+        "DOCKER_MIGRATION_CONNECT_SOURCE": "Connect to source server via SSH",
+        "DOCKER_MIGRATION_COLLECT_FS": "Collect entire filesystem",
+        "DOCKER_MIGRATION_CREATE_IMAGE": "Create Docker image",
+        "DOCKER_MIGRATION_START_CONTAINER": "Start Docker container",
+        "DOCKER_MIGRATION_CERTIFICATION_CHECK": "Make sure that:",
+        "DOCKER_MIGRATION_DOCKER_INSTALLED": "Docker is installed and running",
+        "DOCKER_MIGRATION_SOURCE_ACCESSIBLE": "Source server is accessible via SSH",
+        "DOCKER_MIGRATION_ENOUGH_DISK": "There's enough disk space",
+        "CONFIRM_DOCKER_MIGRATION": "Confirm Docker migration?",
+        
+        # Docker migration results
+        "DOCKER_MIGRATION_COMPLETED": "🎉 Docker Migration Completed!",
+        "DOCKER_IMAGE": "Image",
+        "DOCKER_NETWORK": "Network",
+        "DOCKER_PORTS": "Ports",
+        "DOCKER_VOLUMES": "Volumes",
+        "DOCKER_USEFUL_COMMANDS": "💡 Useful commands:",
+        "DOCKER_EXEC_COMMAND": "docker exec -it",
+        "DOCKER_EXEC_DESC": "# Enter container",
+        "DOCKER_STOP_COMMAND": "docker stop",
+        "DOCKER_STOP_DESC": "# Stop container",
+        "DOCKER_START_COMMAND": "docker start",
+        "DOCKER_START_DESC": "# Start container",
+        "DOCKER_LOGS_COMMAND": "docker logs",
+        "DOCKER_LOGS_DESC": "# View logs",
+        
+        # Migration completion banner
+        "MIGRATION_COMPLETE_BANNER": "🎉 Migration completed!",
+        "PCT_ENTER": "pct enter",
+        "PCT_STOP": "pct stop",
+        "PCT_START": "pct start",
+        "PCT_STATUS": "pct status",
+        "ENTER_CONTAINER": "# Enter container",
+        "STOP_CONTAINER": "# Stop container",
+        "START_CONTAINER": "# Start container",
+        "CONTAINER_STATUS": "# Container status",
+        "MB": "MB",
+        "IN": "in",
+        
+        # Additional missing translations
+        "DOCKER_MIGRATION_CANCELLED_BY_USER": "Docker migration cancelled by user",
+        "MIGRATION_CANCELLED_BY_USER": "Migration cancelled by user",
+        "UNEXPECTED_ERROR": "Unexpected error",
+        "FILESYSTEM_COLLECTION_FAILED": "Filesystem collection failed",
+        "SSH_CONNECTION_FAILED": "SSH connection failed",
+        "UNEXPECTED_ERROR": "Unexpected error",
+        
+        # Docker specific missing translations
+        "DOCKER_DEP": "Docker",
+        "DOCKER_MIGRATION_TITLE": "🐳 LINCON - Linux → Docker Migration",
+        "DOCKER_MIGRATION_STARTING": "🔄 Starting Docker migration process...",
+        "DOCKER_CONTAINER_EXISTS": "Container '{}' already exists!",
+        "CHOOSE_ANOTHER_NAME": "Choose another name?",
+        "NETWORK_OPTIONS": "Network Options",
+        "MIGRATION_TIMEOUT": "Migration timeout exceeded",
+        "NO_OUTPUT_TIMEOUT": "No output received for a long time",
+        "CHECKING_SSH_CONNECTION": "Checking SSH connection...",
+        "SSH_ACTIVE_CONTINUE": "SSH is active, continuing...",
+        "SSH_CONNECTION_LOST": "SSH connection lost",
+        "SSH_CONNECTION_LOST_DURING_MIGRATION": "SSH connection lost during migration",
+        "ERROR_READING_OUTPUT": "Error reading process output",
+        "MIGRATION_FAILED": "Migration failed",
+        "MIGRATION_CODE": "Exit code",
+        "FINAL_OUTPUT": "Final output"
     }
 }
