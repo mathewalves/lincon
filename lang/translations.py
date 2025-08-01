@@ -651,7 +651,12 @@ translations = {
         "ERROR_READING_OUTPUT": "Erro ao ler saída do processo",
         "MIGRATION_FAILED": "Migração falhou",
         "MIGRATION_CODE": "Código de saída",
-        "FINAL_OUTPUT": "Saída final"
+        "FINAL_OUTPUT": "Saída final",
+        
+        # Ajuda pós-migração
+        "POST_MIGRATION_HELP": "Ajuda Pós-Migração",
+        "POST_MIGRATION_FIX_AVAILABLE": "Script de correção disponível",
+        "POST_MIGRATION_INSTRUCTIONS": "Instruções para correção pós-migração"
     },
     "en": {
         # menu
@@ -1306,6 +1311,11 @@ translations = {
         "ERROR_READING_OUTPUT": "Error reading process output",
         "MIGRATION_FAILED": "Migration failed",
         "MIGRATION_CODE": "Exit code",
-        "FINAL_OUTPUT": "Final output"
+        "FINAL_OUTPUT": "Final output",
+        
+        # Post-migration help
+        "POST_MIGRATION_HELP": "Post-Migration Help",
+        "POST_MIGRATION_FIX_AVAILABLE": "Correction script available",
+        "POST_MIGRATION_INSTRUCTIONS": "Post-migration correction instructions"
     }
 }

@@ -925,6 +925,13 @@ def execute_migration_with_enhanced_feedback(data):
             console.print(f"[white]   {get_text('PCT_START')} {data['id']}    [dim]{get_text('START_CONTAINER')}[/dim][/white]")
             console.print(f"[white]   {get_text('PCT_STATUS')} {data['id']}   [dim]{get_text('CONTAINER_STATUS')}[/dim][/white]")
             
+            # Adiciona instruções para correção pós-migração
+            console.print(f"\n[cyan]🔧 {get_text('POST_MIGRATION_HELP')}[/cyan]")
+            console.print(f"[white]   Se houver problemas com serviços (Apache, MySQL, etc.):[/white]")
+            console.print(f"[white]   1. Entre no container: pct enter {data['id']}[/white]")
+            console.print(f"[white]   2. Execute o script de correção: ./post_migration_fix.sh[/white]")
+            console.print(f"[white]   3. Tente iniciar os serviços novamente[/white]")
+            
             return True
         else:
             console.print(f"[red]{get_text('MIGRATION_FAILED')}: {get_text('MIGRATION_CODE')}: {return_code}[/red]")

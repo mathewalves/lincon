@@ -55,7 +55,7 @@ collectFS() {
     --exclude="./run" \
     --exclude="./proc" \
     --exclude="*.log" \
-    --exclude="*.log*" \
+    --exclude="*.log.*" \
     --exclude="*.gz" \
     --exclude="*.sql" \
     --exclude="./swap.img" \
@@ -64,10 +64,87 @@ collectFS() {
     --exclude="./var/lib/docker" \
     --exclude="./var/lib/containers" \
     --exclude="./var/cache" \
-    --exclude="./var/log" \
+    --exclude="./var/log/*.log" \
+    --exclude="./var/log/*.log.*" \
+    --exclude="./var/log/apt" \
+    --exclude="./var/log/btmp" \
+    --exclude="./var/log/faillog" \
+    --exclude="./var/log/lastlog" \
+    --exclude="./var/log/wtmp" \
+    --exclude="./var/log/alternatives.log" \
+    --exclude="./var/log/bootstrap.log" \
+    --exclude="./var/log/dpkg.log" \
+    --exclude="./var/log/fontconfig.log" \
+    --exclude="./var/log/fsck" \
+    --exclude="./var/log/installer" \
+    --exclude="./var/log/landscape" \
+    --exclude="./var/log/lightdm" \
+    --exclude="./var/log/upstart" \
+    --exclude="./var/log/unattended-upgrades" \
+    --exclude="./var/log/upstart" \
+    --exclude="./var/log/upstart" \
     --exclude="./var/backups" \
     --exclude="./mnt" \
     --exclude="./media" \
+    --exclude="./var/lib/dpkg/info" \
+    --exclude="./var/lib/apt" \
+    --exclude="./var/lib/dpkg" \
+    --exclude="./var/cache/apt" \
+    --exclude="./var/cache/debconf" \
+    --exclude="./var/lib/systemd" \
+    --exclude="./var/lib/NetworkManager" \
+    --exclude="./var/lib/upower" \
+    --exclude="./var/lib/udisks2" \
+    --exclude="./var/lib/polkit-1" \
+    --exclude="./var/lib/colord" \
+    --exclude="./var/lib/AccountsService" \
+    --exclude="./var/lib/gdm3" \
+    --exclude="./var/lib/lightdm" \
+    --exclude="./var/lib/sddm" \
+    --exclude="./var/lib/plymouth" \
+    --exclude="./var/lib/update-notifier" \
+    --exclude="./var/lib/ubuntu-release-upgrader" \
+    --exclude="./var/lib/ubuntu-drivers-common" \
+    --exclude="./var/lib/snapd" \
+    --exclude="./var/lib/flatpak" \
+    --exclude="./var/lib/app-info" \
+    --exclude="./var/lib/dbus" \
+    --exclude="./var/lib/aspell" \
+    --exclude="./var/lib/dictionaries-common" \
+    --exclude="./var/lib/wordlists" \
+    --exclude="./var/lib/mlocate" \
+    --exclude="./var/lib/alternatives" \
+    --exclude="./var/lib/menu" \
+    --exclude="./var/lib/update-rc.d" \
+    --exclude="./var/lib/dpkg/alternatives" \
+    --exclude="./var/lib/dpkg/info" \
+    --exclude="./var/lib/dpkg/triggers" \
+    --exclude="./var/lib/dpkg/updates" \
+    --exclude="./var/lib/dpkg/parts" \
+    --exclude="./var/lib/dpkg/status-old" \
+    --exclude="./var/lib/dpkg/status" \
+    --exclude="./var/lib/dpkg/available" \
+    --exclude="./var/lib/dpkg/available-old" \
+    --exclude="./var/lib/dpkg/lock" \
+    --exclude="./var/lib/dpkg/lock-frontend" \
+    --exclude="./var/lib/dpkg/lock-frontend" \
+    --exclude="./var/lib/dpkg/triggers" \
+    --exclude="./var/lib/dpkg/triggers/Unincorp" \
+    --exclude="./var/lib/dpkg/triggers/File" \
+    --exclude="./var/lib/dpkg/triggers/NoPath" \
+    --exclude="./var/lib/dpkg/triggers/Path" \
+    --exclude="./var/lib/dpkg/triggers/Interest" \
+    --exclude="./var/lib/dpkg/triggers/Interest-NoWait" \
+    --exclude="./var/lib/dpkg/triggers/Interest-Await" \
+    --exclude="./var/lib/dpkg/triggers/Processed" \
+    --exclude="./var/lib/dpkg/triggers/Unincorp" \
+    --exclude="./var/lib/dpkg/triggers/File" \
+    --exclude="./var/lib/dpkg/triggers/NoPath" \
+    --exclude="./var/lib/dpkg/triggers/Path" \
+    --exclude="./var/lib/dpkg/triggers/Interest" \
+    --exclude="./var/lib/dpkg/triggers/Interest-NoWait" \
+    --exclude="./var/lib/dpkg/triggers/Interest-Await" \
+    --exclude="./var/lib/dpkg/triggers/Processed" \
     .
 }
 
@@ -112,8 +189,8 @@ format_size() {
     fi
 }
 
-# Adicionar bloco de traduções no início do script
-# Detectar idioma
+# adicionar bloco de traduções no início do script
+# detectar idioma
 LANG_CODE="${LINCON_LANG:-${LANG:0:2}}"
 if [ "$LANG_CODE" = "en" ]; then
   MSG_START_MIGRATION="Starting container migration..."
@@ -229,7 +306,7 @@ else
     net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
 fi
 
-# Cria um script temporário para o comando 'pct create' para ser executado pelo 'at'
+# cria um script temporário para o comando 'pct create'
 CREATE_SCRIPT="/tmp/create_ct_${id}.sh"
 cat > "$CREATE_SCRIPT" << EOF
 #!/bin/bash
