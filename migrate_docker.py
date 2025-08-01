@@ -156,7 +156,7 @@ def collect_user_data():
     
     data = {}
     
-    # Nome do Container
+    # nome do container
     console.print(f"[cyan]{get_text('DOCKER_CONTAINER_NAME')}[/cyan]")
     display_recommendation(get_text("DOCKER_CONTAINER_NAME_DESC"))
     
@@ -180,7 +180,7 @@ def collect_user_data():
         else:
             display_error(get_text("DOCKER_CONTAINER_NAME_ERROR"))
 
-    # Host de origem
+    # host de origem
     console.print(f"\n[cyan]{get_text('SOURCE_SERVER')}[/cyan]")
     display_recommendation(get_text("SOURCE_SERVER_DESC"))
     
@@ -192,7 +192,7 @@ def collect_user_data():
         else:
             display_error(get_text("INVALID_HOSTNAME"))
 
-    # Porta SSH
+    # porta SSH
     ssh_port_title = get_text("SSH_PORT").format(data['target'])
     console.print(f"\n[cyan]{ssh_port_title}[/cyan]")
     
@@ -204,7 +204,7 @@ def collect_user_data():
         else:
             display_error(get_text("INVALID_PORT"))
 
-    # Senha SSH
+    # senha SSH
     console.print(f"\n[cyan]{get_text('SSH_CREDENTIALS')}[/cyan]")
     display_warning(get_text("SSH_PASSWORD_WARNING"))
     
@@ -295,7 +295,6 @@ def collect_filesystem_simple(target, port, password):
         "--exclude=./var/cache/apt/archives",
         "--exclude=./boot",
         "--exclude=./lib/modules",
-        "--exclude=./var/lib/docker",
         "--exclude=./var/log",
         "--exclude=./var/cache",
         "--exclude=./var/tmp",
@@ -651,7 +650,7 @@ def execute_docker_migration_simple(data):
                                     size_mb = current_size / (1024 * 1024)
                                     progress.update(task, description=f"📡 Coletando sistema... ({size_mb:.1f} MB)")
             
-            # Verifica se a coleta foi bem-sucedida
+            # verifica se a coleta foi bem-sucedida
             return_code = process.wait(timeout=30)
             if return_code != 0:
                 stderr_output = ""
@@ -672,19 +671,19 @@ def execute_docker_migration_simple(data):
             size_mb = filesystem_tar.stat().st_size / (1024 * 1024)
             console.print(f"[green]✅ {get_text('SYSTEM_COLLECTED')}: {size_mb:.1f} {get_text('MB')}[/green]")
             
-            # Detecta o sistema operacional da máquina de origem
+            # detecta o sistema operacional da máquina de origem
             os_info = detect_os_simple(data["target"], data["port"], data["passwordSSH"])
             
-            # Permite ao usuário selecionar a imagem base
+            # permite ao usuário selecionar a imagem base
             base_image_choice = select_base_image(os_info)
             
-            # Cria Dockerfile
+            # criar Dockerfile
             console.print(f"[cyan]🐳 {get_text('BUILDING_DOCKER_IMAGE')}[/cyan]")
             dockerfile_path = temp_path / "Dockerfile"
             with open(dockerfile_path, 'w') as f:
                 f.write(create_dockerfile_with_base_image(base_image_choice))
             
-            # Constrói imagem Docker
+            # constrói imagem Docker
             build_command = [
                 "docker", "build", "-t", f"lincon-migrated:{data['container_name']}", 
                 str(temp_path)
@@ -724,18 +723,18 @@ def execute_docker_migration_simple(data):
             
             display_success("MSG_DOCKER_IMAGE_CREATED")
             
-            # Executa container
+            # executa container
             console.print(f"[cyan]🚀 {get_text('STARTING_DOCKER_CONTAINER')}[/cyan]")
             
             run_command = ["docker", "run", "-d", "--name", data['container_name']]
             
-            # Adiciona configuração de rede
+            # adiciona configuração de rede
             if data["network"] == "host":
                 run_command.extend(["--network", "host"])
             elif data["network"] == "none":
                 run_command.extend(["--network", "none"])
             
-            # Adiciona mapeamento de portas
+            # adiciona mapeamento de portas
             if data.get("ports") and data["network"] not in ["host", "none"]:
                 for port_map in data["ports"].split(","):
                     if ":" in port_map.strip():
@@ -748,7 +747,7 @@ def execute_docker_migration_simple(data):
             if result.returncode == 0:
                 display_success("MSG_DOCKER_CONTAINER_STARTED")
                 
-                # Mostra informações finais
+                # mostra informações finais
                 console.print("="*70)
                 console.print(f"[bold green]{get_text('DOCKER_MIGRATION_COMPLETED')}[/bold green]")
                 console.print("="*70)
@@ -833,7 +832,7 @@ def migrate_docker():
     
     signal.signal(signal.SIGINT, handle_interrupt)
     
-    # 1. Verifica migrações incompletas
+    # 1. verificar migrações incompletas
     state_manager, previous_state = check_incomplete_migrations()
     
     if not check_dependencies():
@@ -851,10 +850,10 @@ def migrate_docker():
             return False
         state_manager.save_state(data, "input_collected")
     
-    # 3. Validação dos dados
+    # 3. validação dos dados
     state_manager.save_state(data, "validated")
     
-    # 4. Confirmação
+    # 4. confirmação
     if not previous_state or previous_state['step'] not in ['converting', 'validated']:
         if not confirm_migration(data):
             console.print(f"\n[yellow]{get_text('MIGRATION_CANCELLED_INPUT')}[/yellow]")
@@ -863,7 +862,7 @@ def migrate_docker():
     
     state_manager.save_state(data, "converting")
 
-    # 5. Executa migração
+    # 5. executar migração
     if execute_docker_migration_simple(data):
         state_manager.save_state(data, "completed")
         state_manager.clear_state()

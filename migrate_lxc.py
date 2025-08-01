@@ -303,6 +303,7 @@ def detect_disk_usage(target, port, password):
     console.print(f"[cyan]📊 Detectando uso do disco no servidor origem...[/cyan]")
     
     try:
+        # Comando para obter uso do disco em MB
         cmd = [
             "sshpass", "-p", password,
             "ssh", "-p", str(port),
@@ -316,9 +317,12 @@ def detect_disk_usage(target, port, password):
         
         if result.returncode == 0:
             used_mb = int(result.stdout.strip().replace('M', ''))
-            # Adiciona margem de segurança de 20%
-            recommended_mb = int(used_mb * 1.2)
-            recommended_gb = recommended_mb // 1024
+            
+            # Calcula tamanho recomendado com margem de segurança
+            # Para sistemas Linux, o tamanho descompactado pode ser 2-4x maior que o uso atual
+            # Usamos um fator conservador de 3x + 20% de margem
+            recommended_mb = int(used_mb * 3 * 1.2)
+            recommended_gb = max(2, recommended_mb // 1024)  # Mínimo 2GB
             
             console.print(f"[green]✅ Detecção concluída:[/green]")
             console.print(f"   📦 Uso atual: {used_mb} MB ({used_mb//1024:.1f} GB)")
@@ -359,6 +363,37 @@ def parse_size_input(size_input):
 def format_size_gb(mb):
     """Formata tamanho em MB para exibição em GB"""
     return f"{mb // 1024}G"
+
+def estimate_required_disk_size(tar_file_path):
+    """Estima o tamanho necessário do disco baseado no arquivo tar.gz"""
+    try:
+        if not os.path.exists(tar_file_path):
+            return None
+        
+        # Obtém o tamanho do arquivo tar.gz em bytes
+        tar_size = os.path.getsize(tar_file_path)
+        
+        # Estimativa: arquivo tar.gz descompactado geralmente é 3-5x maior
+        # Usamos um fator conservador de 4x para garantir espaço suficiente
+        estimated_uncompressed = tar_size * 4
+        
+        # Converte para GB (1GB = 1073741824 bytes)
+        estimated_gb = estimated_uncompressed // 1073741824
+        
+        # Adiciona 20% de margem de segurança
+        recommended_gb = estimated_gb + (estimated_gb // 5)
+        
+        # Mínimo de 2GB
+        recommended_gb = max(2, recommended_gb)
+        
+        # Máximo de 100GB (limite de segurança)
+        recommended_gb = min(100, recommended_gb)
+        
+        return recommended_gb
+        
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Erro ao estimar tamanho: {e}[/yellow]")
+        return None
 
 def check_storage_space_mb(storage_info, required_mb):
     """Verifica se há espaço suficiente no storage"""

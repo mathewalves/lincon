@@ -7,32 +7,6 @@ then
     exit 1
 fi
 
-# Função para exibir o uso do script
-usage()
-{
-    cat <<EOF
-Uso: $(basename "$0") [opções]
-
-Opções Obrigatórias:
- -n, --name [nome]             Nome para o novo container LXC.
- -t, --target [host]           IP ou hostname do servidor de origem a ser migrado.
- -P, --port [porta]            Porta SSH do servidor de origem.
- -i, --id [id]                 ID numérico para o novo container no Proxmox.
- -s, --root-size [tamanho]     Tamanho do disco para o rootfs (ex: 4G, 10G).
- -a, --ip [ip|dhcp]            Endereço IP para o container (ex: 192.168.1.100 ou dhcp).
- -b, --bridge [bridge]         Interface de bridge do Proxmox (ex: vmbr0).
- -g, --gateway [gateway]       Gateway da rede (necessário se o IP não for dhcp).
- -m, --memory [memoria]        Memória RAM em MB para o container (ex: 1024).
- -d, --disk-storage [storage]  Pool de armazenamento do Proxmox para o disco.
- -p, --password [senha]        Senha 'root' para o novo container (mín. 5 caracteres).
- -w, --ssh-password [senha]    Senha 'root' do servidor de origem para conexão SSH.
-
-Ajuda:
- -h, --help                    Exibe esta mensagem de ajuda.
-EOF
-    return 0
-}
-
 # Analisa as opções da linha de comando
 options=$(getopt -o n:t:P:i:s:a:b:g:m:d:p:w:h -l help,name:,target:,port:,id:,root-size:,ip:,bridge:,gateway:,memory:,disk-storage:,password:,ssh-password: -- "$@")
 if [ $? -ne 0 ]; then
@@ -97,6 +71,47 @@ collectFS() {
     .
 }
 
+# Função para calcular o tamanho necessário do disco
+calculate_disk_size() {
+    local tar_file="$1"
+    local current_size="$2"
+    
+    # Obtém o tamanho do arquivo tar.gz em bytes
+    local tar_size=$(stat -c%s "$tar_file" 2>/dev/null || echo "0")
+    
+    # Estimativa: arquivo tar.gz descompactado geralmente é 3-5x maior
+    # Usamos um fator conservador de 4x para garantir espaço suficiente
+    local estimated_uncompressed=$((tar_size * 4))
+    
+    # Converte para GB (1GB = 1073741824 bytes)
+    local estimated_gb=$((estimated_uncompressed / 1073741824))
+    
+    # Adiciona 20% de margem de segurança
+    local recommended_gb=$((estimated_gb + (estimated_gb / 5)))
+    
+    # Mínimo de 2GB
+    if [ "$recommended_gb" -lt 2 ]; then
+        recommended_gb=2
+    fi
+    
+    # Máximo de 100GB (limite de segurança)
+    if [ "$recommended_gb" -gt 100 ]; then
+        recommended_gb=100
+    fi
+    
+    echo "$recommended_gb"
+}
+
+# Função para converter tamanho para formato adequado
+format_size() {
+    local size="$1"
+    if [ "$size" -ge 1024 ]; then
+        echo "${size}G"
+    else
+        echo "${size}M"
+    fi
+}
+
 # Adicionar bloco de traduções no início do script
 # Detectar idioma
 LANG_CODE="${LINCON_LANG:-${LANG:0:2}}"
@@ -116,6 +131,13 @@ if [ "$LANG_CODE" = "en" ]; then
   MSG_ERROR_AT="❌ Failed to schedule the container creation task with 'at'. Check if the 'atd' service is installed and running."
   MSG_CONTAINER_STARTED="Container started successfully!"
   MSG_CONTAINER_START_FAILED="⚠️  The container was created but failed to start. Try manually: pct start"
+  MSG_ANALYZING_SIZE="Analyzing filesystem size..."
+  MSG_COLLECTED_SIZE="Collected file size:"
+  MSG_ORIGINAL_SIZE="Original configured size:"
+  MSG_RECOMMENDED_SIZE="Recommended size:"
+  MSG_SIZE_WARNING="Warning: The configured size may be insufficient."
+  MSG_SIZE_ADJUSTING="Automatically adjusting to avoid space errors..."
+  MSG_SIZE_OK="Configured size is adequate."
 else
   MSG_START_MIGRATION="Iniciando o processo de migração..."
   MSG_COLLECT_FS="Coletando sistema de arquivos de"
@@ -132,6 +154,13 @@ else
   MSG_ERROR_AT="❌ Falha ao agendar a tarefa de criação do contêiner com 'at'. Verifique se o serviço 'atd' está instalado e em execução."
   MSG_CONTAINER_STARTED="Contêiner iniciado com sucesso!"
   MSG_CONTAINER_START_FAILED="⚠️  O contêiner foi criado mas falhou ao iniciar. Tente manualmente: pct start"
+  MSG_ANALYZING_SIZE="Analisando tamanho do sistema de arquivos..."
+  MSG_COLLECTED_SIZE="Tamanho do arquivo coletado:"
+  MSG_ORIGINAL_SIZE="Tamanho original configurado:"
+  MSG_RECOMMENDED_SIZE="Tamanho recomendado:"
+  MSG_SIZE_WARNING="Aviso: O tamanho configurado pode ser insuficiente."
+  MSG_SIZE_ADJUSTING="Ajustando automaticamente para evitar erros de espaço..."
+  MSG_SIZE_OK="Tamanho configurado é adequado."
 fi
 
 # Função de log
@@ -155,6 +184,31 @@ fi
 
 log_msg "$MSG_FS_COLLECTED"
 echo "$MSG_FS_COLLECTED"
+
+# Calcula o tamanho necessário do disco baseado no arquivo coletado
+echo "📊 $MSG_ANALYZING_SIZE"
+tar_file="/tmp/$name.tar.gz"
+original_size="$rootsize"
+
+# Remove sufixos G/M para obter apenas o número
+original_size_num=$(echo "$original_size" | sed 's/[GM]//I')
+
+# Calcula o tamanho recomendado
+recommended_size=$(calculate_disk_size "$tar_file" "$original_size_num")
+
+echo "📦 $MSG_COLLECTED_SIZE $(du -h "$tar_file" | cut -f1)"
+echo "💾 $MSG_ORIGINAL_SIZE ${original_size_num}GB"
+echo "🔍 $MSG_RECOMMENDED_SIZE ${recommended_size}GB"
+
+# Se o tamanho recomendado for maior que o original, ajusta automaticamente
+if [ "$recommended_size" -gt "$original_size_num" ]; then
+    echo "⚠️  $MSG_SIZE_WARNING"
+    echo "🔄 $MSG_SIZE_ADJUSTING"
+    rootsize="${recommended_size}G"
+else
+    echo "✅ $MSG_SIZE_OK"
+    rootsize="$original_size"
+fi
 
 log_msg "$MSG_CREATING_CT $id ($name)..."
 echo "$MSG_CREATING_CT $id ($name)..."
