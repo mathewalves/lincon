@@ -23,9 +23,19 @@ console = Console()
 logger = setup_logging()
 
 def get_text(key):
-    """Obtém texto traduzido"""
+    """Obtém texto traduzido com fallback seguro e logging"""
     lang = os.environ.get("LINCON_LANG", "pt-br")
-    return translations[lang].get(key, key)
+    try:
+        lang_map = translations.get(lang)
+        if not lang_map:
+            logger.warning(f"Idioma não encontrado: {lang}. Usando 'pt-br'.")
+            lang_map = translations.get("pt-br", {})
+        if key not in lang_map:
+            logger.warning(f"Tradução ausente para chave '{key}' no idioma '{lang}'.")
+        return lang_map.get(key, key)
+    except Exception as e:
+        logger.warning(f"Falha ao obter tradução para '{key}': {e}")
+        return key
 
 def display_error(message_key):
     """Exibe um erro usando tradução e registra log"""

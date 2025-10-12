@@ -656,7 +656,66 @@ translations = {
         # Ajuda pós-migração
         "POST_MIGRATION_HELP": "Ajuda Pós-Migração",
         "POST_MIGRATION_FIX_AVAILABLE": "Script de correção disponível",
-        "POST_MIGRATION_INSTRUCTIONS": "Instruções para correção pós-migração"
+        "POST_MIGRATION_INSTRUCTIONS": "Instruções para correção pós-migração",
+
+        # Dependências (LXC)
+        "PCT_DEP": "pct",
+        "PVESM_DEP": "pvesm",
+        "BRCTL_DEP": "brctl",
+
+        # Informações de sistema (menu principal)
+        "system_info": "Informações do sistema",
+        "components_status": "Componentes",
+        "available": "disponível",
+        "not_available": "indisponível",
+        "press_enter_to_continue": "Pressione Enter para continuar",
+
+        # Armazenamento e tamanho de disco (LXC)
+        "STORAGE_INFO_UNAVAILABLE": "Informações de storage indisponíveis",
+        "INVALID_STORAGE_FORMAT": "Formato de informação de storage inválido",
+        "NOT_ENOUGH_STORAGE": "Espaço insuficiente no storage (disp: {0} GB, necessário: {1} GB)",
+        "ENOUGH_STORAGE": "Espaço suficiente no storage (disp: {0} GB, necessário: {1} GB)",
+        "USE_RECOMMENDED_SIZE": "Usar tamanho recomendado",
+        "CUSTOM_SIZE": "Tamanho personalizado",
+        "CUSTOM_SIZE_DESC": "Informe um tamanho em GB/MB (ex: 20G, 2048M)",
+        "CHOOSE_DISK_SIZE_OPTION": "Escolha a opção de tamanho de disco",
+        "NEED_SMALLER_SIZE": "Tamanho recomendado não cabe no storage. Escolha um menor.",
+        "CUSTOM_SIZE_PROMPT": "Informe o tamanho do disco root",
+        "AVAILABLE_STORAGE_SPACE": "Espaço disponível",
+        "SIZE_FORMAT_TIP": "Dica: use G para gigabytes ou M para megabytes",
+        "SIZE_FORMAT_EXAMPLES": "Exemplos: 20G, 500M, 30720M",
+        "ENTER_DISK_SIZE": "Digite o tamanho do disco",
+        "USE_EXAMPLES": "Use os exemplos como referência de formato",
+        "TOO_SMALL_SIZE": "Tamanho muito pequeno! Mínimo 512MB",
+        "TRY_SMALLER_SIZE_OR_OTHER_STORAGE": "Tente um tamanho menor ou selecione outro storage",
+        "TRY_ANOTHER_SIZE": "Tentar outro tamanho?",
+        "SELECTED_SIZE": "Tamanho selecionado",
+        "CONFIRM_SIZE": "Confirmar tamanho?",
+        "IP": "IP",
+        "GATEWAY": "Gateway",
+        "SUBNET_MASK": "Máscara de Sub-rede",
+        "SUBNET_MASK_PROMPT": "Digite a máscara de sub-rede",
+        "SUBNET_MASK_FORMAT_REC": "Formato: /24, /16, /8 (ou CIDR)",
+        "INVALID_SUBNET_MASK": "Máscara inválida! Use formato: /24, /16, /8",
+        "SUBNET_MASK_OPTIONS": "Opções de Máscara",
+        "SUBNET_MASK_24": "/24 (255.255.255.0) - 254 hosts",
+        "SUBNET_MASK_16": "/16 (255.255.0.0) - 65534 hosts", 
+        "SUBNET_MASK_8": "/8 (255.0.0.0) - 16777214 hosts",
+        "SUBNET_MASK_CUSTOM": "Personalizada",
+        "CHOOSE_SUBNET_MASK": "Escolha a máscara de sub-rede",
+
+        # Estado de migrações (listas)
+        "PENDING_MIGRATIONS": "Migrações Pendentes",
+        "MIGRATION_ID": "ID",
+        "MIGRATION_DATE": "Data",
+        "MIGRATION_CONTAINER": "Container",
+        "MIGRATION_STATUS": "Status",
+        "UNKNOWN_CONTAINER": "Desconhecido",
+
+        # Mensagens adicionais LXC
+        "MIGRATION_STARTING_BANNER": "Iniciando migração LXC...",
+        "SCRIPT_NOT_FOUND": "Script não encontrado",
+        "MIGRATION_TIMEOUT_ERROR": "Tempo limite da migração excedido"
     },
     "en": {
         # menu
@@ -1316,6 +1375,65 @@ translations = {
         # Post-migration help
         "POST_MIGRATION_HELP": "Post-Migration Help",
         "POST_MIGRATION_FIX_AVAILABLE": "Correction script available",
-        "POST_MIGRATION_INSTRUCTIONS": "Post-migration correction instructions"
+        "POST_MIGRATION_INSTRUCTIONS": "Post-migration correction instructions",
+
+        # Dependencies (LXC)
+        "PCT_DEP": "pct",
+        "PVESM_DEP": "pvesm",
+        "BRCTL_DEP": "brctl",
+
+        # System info (main menu)
+        "system_info": "System information",
+        "components_status": "Components",
+        "available": "available",
+        "not_available": "not available",
+        "press_enter_to_continue": "Press Enter to continue",
+
+        # Storage and disk size (LXC)
+        "STORAGE_INFO_UNAVAILABLE": "Storage information unavailable",
+        "INVALID_STORAGE_FORMAT": "Invalid storage information format",
+        "NOT_ENOUGH_STORAGE": "Not enough storage space (available: {0} GB, needed: {1} GB)",
+        "ENOUGH_STORAGE": "Enough storage space (available: {0} GB, needed: {1} GB)",
+        "USE_RECOMMENDED_SIZE": "Use recommended size",
+        "CUSTOM_SIZE": "Custom size",
+        "CUSTOM_SIZE_DESC": "Enter a size in GB/MB (e.g., 20G, 2048M)",
+        "CHOOSE_DISK_SIZE_OPTION": "Choose disk size option",
+        "NEED_SMALLER_SIZE": "Recommended size does not fit. Choose a smaller one.",
+        "CUSTOM_SIZE_PROMPT": "Enter root disk size",
+        "AVAILABLE_STORAGE_SPACE": "Available space",
+        "SIZE_FORMAT_TIP": "Tip: use G for gigabytes or M for megabytes",
+        "SIZE_FORMAT_EXAMPLES": "Examples: 20G, 500M, 30720M",
+        "ENTER_DISK_SIZE": "Enter disk size",
+        "USE_EXAMPLES": "Use the examples as format reference",
+        "TOO_SMALL_SIZE": "Size too small! Minimum 512MB",
+        "TRY_SMALLER_SIZE_OR_OTHER_STORAGE": "Try a smaller size or choose another storage",
+        "TRY_ANOTHER_SIZE": "Try another size?",
+        "SELECTED_SIZE": "Selected size",
+        "CONFIRM_SIZE": "Confirm size?",
+        "IP": "IP",
+        "GATEWAY": "Gateway",
+        "SUBNET_MASK": "Subnet Mask",
+        "SUBNET_MASK_PROMPT": "Enter subnet mask",
+        "SUBNET_MASK_FORMAT_REC": "Format: /24, /16, /8 (or CIDR)",
+        "INVALID_SUBNET_MASK": "Invalid mask! Use format: /24, /16, /8",
+        "SUBNET_MASK_OPTIONS": "Mask Options",
+        "SUBNET_MASK_24": "/24 (255.255.255.0) - 254 hosts",
+        "SUBNET_MASK_16": "/16 (255.255.0.0) - 65534 hosts", 
+        "SUBNET_MASK_8": "/8 (255.0.0.0) - 16777214 hosts",
+        "SUBNET_MASK_CUSTOM": "Custom",
+        "CHOOSE_SUBNET_MASK": "Choose subnet mask",
+
+        # Migration states (lists)
+        "PENDING_MIGRATIONS": "Pending Migrations",
+        "MIGRATION_ID": "ID",
+        "MIGRATION_DATE": "Date",
+        "MIGRATION_CONTAINER": "Container",
+        "MIGRATION_STATUS": "Status",
+        "UNKNOWN_CONTAINER": "Unknown",
+
+        # Additional LXC messages
+        "MIGRATION_STARTING_BANNER": "Starting LXC migration...",
+        "SCRIPT_NOT_FOUND": "Script not found",
+        "MIGRATION_TIMEOUT_ERROR": "Migration timeout exceeded"
     }
 }

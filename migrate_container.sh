@@ -1,5 +1,29 @@
 #!/bin/bash
 
+# Função para mostrar uso do script
+usage() {
+    echo "Uso: $0 [opções]"
+    echo ""
+    echo "Opções:"
+    echo "  -n, --name NAME         Nome do container"
+    echo "  -t, --target TARGET     IP/hostname do servidor origem"
+    echo "  -P, --port PORT         Porta SSH (padrão: 22)"
+    echo "  -i, --id ID             ID do container LXC"
+    echo "  -s, --root-size SIZE    Tamanho do disco root (ex: 20G)"
+    echo "  -a, --ip IP             IP do container (ou 'dhcp')"
+    echo "  -b, --bridge BRIDGE     Bridge de rede"
+    echo "  -g, --gateway GATEWAY   Gateway (para IP estático)"
+    echo "  -c, --subnet-mask MASK  Máscara de sub-rede (padrão: 24)"
+    echo "  -m, --memory MEMORY     Memória em MB"
+    echo "  -d, --disk-storage STORAGE Storage para o container"
+    echo "  -p, --password PASSWORD Senha do container"
+    echo "  -w, --ssh-password PASS Senha SSH do servidor origem"
+    echo "  -h, --help              Mostra esta ajuda"
+    echo ""
+    echo "Exemplo:"
+    echo "  $0 -n web-server -t 192.168.1.100 -i 101 -s 20G -a 192.168.1.200 -b vmbr0 -g 192.168.1.1 -c 24 -m 1024 -d local-lvm -p senha123 -w sshpass"
+}
+
 # Verifica se o comando 'pct' está disponível na máquina host (Proxmox)
 if ! command -v pct &> /dev/null
 then
@@ -8,7 +32,7 @@ then
 fi
 
 # Analisa as opções da linha de comando
-options=$(getopt -o n:t:P:i:s:a:b:g:m:d:p:w:h -l help,name:,target:,port:,id:,root-size:,ip:,bridge:,gateway:,memory:,disk-storage:,password:,ssh-password: -- "$@")
+options=$(getopt -o n:t:P:i:s:a:b:g:m:d:p:w:c:h -l help,name:,target:,port:,id:,root-size:,ip:,bridge:,gateway:,memory:,disk-storage:,password:,ssh-password:,subnet-mask: -- "$@")
 if [ $? -ne 0 ]; then
     usage
     exit 1
@@ -32,6 +56,7 @@ do
         -p|--password)      password=$2; shift 2;;
         -d|--disk-storage)  storage=$2; shift 2;;
         -w|--ssh-password)  ssh_password=$2; shift 2;;
+        -c|--subnet-mask)   subnet_mask=$2; shift 2;;
         --)                 shift; break ;;
         *)                  break ;;
     esac
@@ -303,7 +328,9 @@ fi
 if [ "$ip" = "dhcp" ]; then
     net_config="name=eth0,bridge=$bridge,ip=dhcp"
 else
-    net_config="name=eth0,bridge=$bridge,ip=$ip/24,gw=$gateway"
+    # Usa máscara de sub-rede personalizada se fornecida, senão usa /24 como padrão
+    subnet_mask="${subnet_mask:-24}"
+    net_config="name=eth0,bridge=$bridge,ip=$ip/$subnet_mask,gw=$gateway"
 fi
 
 # cria um script temporário para o comando 'pct create'

@@ -22,7 +22,18 @@ logger = setup_logging()
 current_language = os.environ.get("LINCON_LANG", "pt-br")
 
 def get_text(key):
-    return translations[current_language].get(key, key)
+    # Fallback seguro: se idioma ou chave não existir, retorna a própria chave
+    try:
+        lang_map = translations.get(current_language)
+        if not lang_map:
+            logger.warning(f"Idioma não encontrado: {current_language}. Usando 'pt-br'.")
+            lang_map = translations.get("pt-br", {})
+        if key not in lang_map:
+            logger.warning(f"Tradução ausente para chave '{key}' no idioma '{current_language}'.")
+        return lang_map.get(key, key)
+    except Exception as e:
+        logger.warning(f"Falha ao obter tradução para '{key}': {e}")
+        return key
 
 LINCON_BANNER = """
  [bold bright_cyan]██╗     ██╗███╗   ██╗ ██████╗ ██████╗ ███╗   ██╗

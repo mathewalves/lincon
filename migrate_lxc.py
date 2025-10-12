@@ -26,9 +26,19 @@ console = Console()
 logger = setup_logging()
 
 def get_text(key):
-    """Obtém texto traduzido"""
+    """Obtém texto traduzido com fallback seguro e logging"""
     lang = os.environ.get("LINCON_LANG", "pt-br")
-    return translations[lang].get(key, key)
+    try:
+        lang_map = translations.get(lang)
+        if not lang_map:
+            logger.warning(f"Idioma não encontrado: {lang}. Usando 'pt-br'.")
+            lang_map = translations.get("pt-br", {})
+        if key not in lang_map:
+            logger.warning(f"Tradução ausente para chave '{key}' no idioma '{lang}'.")
+        return lang_map.get(key, key)
+    except Exception as e:
+        logger.warning(f"Falha ao obter tradução para '{key}': {e}")
+        return key
 
 def display_error(message_key):
     """Exibe um erro usando tradução e registra log"""
@@ -91,6 +101,21 @@ def validate_port(port):
     try:
         port_num = int(port)
         return 1 <= port_num <= 65535
+    except ValueError:
+        return False
+
+def validate_subnet_mask(mask):
+    """Valida máscara de sub-rede"""
+    if not mask:
+        return False
+    
+    # Remove / se presente
+    if mask.startswith('/'):
+        mask = mask[1:]
+    
+    try:
+        mask_num = int(mask)
+        return 0 <= mask_num <= 32
     except ValueError:
         return False
 
@@ -527,7 +552,7 @@ def select_ip_config():
 
     if choice == "1":
         if Confirm.ask(get_text("CONFIRM_DHCP")):
-            return "dhcp", "dhcp"
+            return "dhcp", "dhcp", "24"
     
     # IP estático
     console.print(f"\n[yellow]{get_text('STATIC_IP_CONFIG')}[/yellow]")
@@ -549,12 +574,49 @@ def select_ip_config():
         else:
             display_error(get_text("INVALID_GATEWAY"))
     
+    # Seleção da máscara de sub-rede
+    console.print(f"\n[cyan]{get_text('SUBNET_MASK')}[/cyan]")
+    
+    mask_table = Table(title=f"[bold cyan]{get_text('SUBNET_MASK_OPTIONS')}[/bold cyan]", show_header=True)
+    mask_table.add_column("Opção", style="cyan", width=6)
+    mask_table.add_column("Máscara", style="green", width=15)
+    mask_table.add_column("Descrição", style="dim")
+    
+    mask_table.add_row("[1]", "/24", get_text("SUBNET_MASK_24"))
+    mask_table.add_row("[2]", "/16", get_text("SUBNET_MASK_16"))
+    mask_table.add_row("[3]", "/8", get_text("SUBNET_MASK_8"))
+    mask_table.add_row("[4]", get_text("SUBNET_MASK_CUSTOM"), "Digite manualmente")
+    
+    console.print(mask_table)
+    console.print()
+    
+    mask_choice = Prompt.ask(get_text("CHOOSE_SUBNET_MASK"), choices=["1", "2", "3", "4"], default="1")
+    
+    if mask_choice == "1":
+        subnet_mask = "24"
+    elif mask_choice == "2":
+        subnet_mask = "16"
+    elif mask_choice == "3":
+        subnet_mask = "8"
+    else:
+        # Máscara personalizada
+        display_recommendation(get_text("SUBNET_MASK_FORMAT_REC"))
+        while True:
+            mask_input = Prompt.ask(get_text("SUBNET_MASK_PROMPT"), default="24")
+            if validate_subnet_mask(mask_input):
+                # Remove / se presente e armazena apenas o número
+                subnet_mask = mask_input.lstrip('/')
+                break
+            else:
+                display_error(get_text("INVALID_SUBNET_MASK"))
+    
     console.print(f"\n[green]{get_text('NETWORK_CONFIG_SUMMARY')}[/green]")
-    console.print(f"[cyan]{get_text('IP')}:[/cyan] {ip}/24")
+    console.print(f"[cyan]{get_text('IP')}:[/cyan] {ip}/{subnet_mask}")
     console.print(f"[cyan]{get_text('GATEWAY')}:[/cyan] {gateway}")
+    console.print(f"[cyan]{get_text('SUBNET_MASK')}:[/cyan] /{subnet_mask}")
     
     if Confirm.ask(get_text("CONFIRM_NETWORK_CONFIG")):
-        return ip, gateway
+        return ip, gateway, subnet_mask
     else:
         return select_ip_config()
 
@@ -648,9 +710,10 @@ def collect_user_data():
     data["bridge"] = bridge
 
     # Configuração IP
-    ip, gateway = select_ip_config()
+    ip, gateway, subnet_mask = select_ip_config()
     data["ip"] = ip
     data["gateway"] = gateway
+    data["subnet_mask"] = subnet_mask
 
     # Storage
     console.print(f"\n[cyan]{get_text('STORAGE_CONFIG')}[/cyan]")
@@ -715,7 +778,7 @@ def confirm_migration(data):
     if data["ip"] == "dhcp":
         table.add_row(get_text("DETAIL_IP_DHCP"), f"[bright_cyan]{get_text('IP_AUTOMATIC')}[/bright_cyan]")
     else:
-        table.add_row(get_text("DETAIL_IP_STATIC"), f"[bright_green]{data['ip']}/24[/bright_green]")
+        table.add_row(get_text("DETAIL_IP_STATIC"), f"[bright_green]{data['ip']}/{data['subnet_mask']}[/bright_green]")
         table.add_row(get_text("DETAIL_GATEWAY"), f"[bright_green]{data['gateway']}[/bright_green]")
     
     table.add_row(get_text("DETAIL_DISK"), f"[bright_yellow]{data['rootsize']}[/bright_yellow] {get_text('IN')}[dim]{data['storage']}[/dim]")
@@ -769,7 +832,8 @@ def execute_migration_with_enhanced_feedback(data):
         "-m", data["memory"],
         "-d", data["storage"],
         "-p", data["passwordCT"],
-        "-w", data["passwordSSH"]
+        "-w", data["passwordSSH"],
+        "-c", data["subnet_mask"]
     ]
     
     # Unificação dos logs: passa o caminho do log Python para o shell via LINCON_LOG
